@@ -11,7 +11,7 @@ var _stats_root: Control
 var _vitals_box: HBoxContainer
 var _widgets: Dictionary = {}
 
-var _tray: Control
+var _tray: STATUS_TRAY_SCRIPT
 
 ## Mirrors escape-menu → Settings HUD toggles (Preferences.vitals / Preferences.medical).
 var _prefs_vitals: bool = true
@@ -46,16 +46,15 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 	for d in defs:
 		var sid: StringName = d[0]
 		var ttl: String = d[1]
-		var sw: Control = STAT_WIDGET_SCRIPT.new() as Control
+		var sw: STAT_WIDGET_SCRIPT = STAT_WIDGET_SCRIPT.new()
 		sw.setup(sid, ttl, game_data, cfg.get_radial(sid), cfg)
 		_widgets[sid] = sw
 		_vitals_box.add_child(sw)
 
-	_tray = STATUS_TRAY_SCRIPT.new() as Control
+	_tray = STATUS_TRAY_SCRIPT.new()
 	_tray.setup(game_data, cfg)
 	add_child(_tray)
-	if _tray.has_method("refresh"):
-		_tray.call("refresh")
+	_tray.refresh()
 
 
 func configure_hud_prefs(vitals_on: bool, medical_on: bool) -> void:
@@ -66,8 +65,8 @@ func configure_hud_prefs(vitals_on: bool, medical_on: bool) -> void:
 func set_live_game_data(r: Resource) -> void:
 	if r != null && is_instance_valid(r):
 		_game_data = r
-		if _tray && _tray.has_method("set_game_data"):
-			_tray.call("set_game_data", r)
+		if _tray != null:
+			_tray.set_game_data(r)
 
 
 func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
@@ -104,8 +103,7 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 	if _tray:
 		_tray.visible = _prefs_medical
 		_tray.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		if _tray.has_method("refresh"):
-			_tray.call("refresh")
+		_tray.refresh()
 		var tray_size: Vector2 = _tray.get_combined_minimum_size()
 		tray_size.x = maxf(tray_size.x, 28.0)
 		tray_size.y = maxf(tray_size.y, 28.0)
@@ -135,9 +133,9 @@ func tick(delta_sec: float = -1.0) -> void:
 			var fl: float = float(_cfg.min_stat_alpha_floor)
 			alpha = maxf(computed, fl)
 
-		var w: Control = _widgets.get(sid)
-		if w && w.has_method("update_display"):
-			w.call("update_display", p, show_stat, use_radial, alpha)
+		var w := _widgets.get(sid) as STAT_WIDGET_SCRIPT
+		if w != null:
+			w.update_display(p, show_stat, use_radial, alpha)
 
 
 func _uses_radial_mode() -> bool:

@@ -3,12 +3,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="$ROOT/mod"
-PRESETS_DIR="$ROOT/SimpleHUD/widgets/ConfigPresets"
+# Full Config.gd variants live here (standalone; not bundled inside preset VMZs—only copied into staged SimpleHUD/Config.gd).
+PRESETS_DIR="$ROOT/presets"
 
 mkdir -p "$OUT_DIR"
 
 if [ ! -d "$ROOT/SimpleHUD" ] || [ ! -f "$ROOT/mod.txt" ] || [ ! -f "$ROOT/SimpleHUD.default.ini" ] || [ ! -d "$PRESETS_DIR" ]; then
-	echo "SimpleHUD bundle incomplete in $ROOT (need mod.txt, SimpleHUD.default.ini, SimpleHUD/)" >&2
+	echo "SimpleHUD bundle incomplete in $ROOT (need mod.txt, SimpleHUD.default.ini, SimpleHUD/, presets/)" >&2
 	exit 1
 fi
 
@@ -31,7 +32,7 @@ for preset_dir in preset_paths:
 	preset_name = preset_dir.name
 	preset_config = preset_dir / "Config.gd"
 	if not preset_config.is_file():
-		print(f"Skip preset '{preset_name}': missing Config.gd")
+		print(f"Skip preset '{preset_name}': missing presets/{preset_dir.name}/Config.gd")
 		continue
 
 	out_file = out_dir / f"SimpleUI-{preset_name}.vmz"
@@ -42,9 +43,8 @@ for preset_dir in preset_paths:
 		stage = pathlib.Path(tmp)
 		shutil.copy2(root / "mod.txt", stage / "mod.txt")
 		shutil.copy2(root / "SimpleHUD.default.ini", stage / "SimpleHUD.default.ini")
+		# Runtime package only — preset sources stay under ROOT/presets (not zipped).
 		shutil.copytree(root / "SimpleHUD", stage / "SimpleHUD")
-		if (root / "Docs").exists():
-			shutil.copytree(root / "Docs", stage / "Docs")
 
 		# Inject preset config as active runtime config for this bundle.
 		shutil.copy2(preset_config, stage / "SimpleHUD" / "Config.gd")
@@ -54,11 +54,8 @@ for preset_dir in preset_paths:
 				pathlib.Path("mod.txt"),
 				pathlib.Path("SimpleHUD.default.ini"),
 				pathlib.Path("SimpleHUD"),
-				pathlib.Path("Docs"),
 			]:
 				path = stage / rel
-				if rel.name == "Docs" and not path.exists():
-					continue
 				if path.is_file():
 					zf.write(path, rel.as_posix())
 				else:
@@ -70,7 +67,7 @@ for preset_dir in preset_paths:
 	built_any = True
 
 if not built_any:
-	raise SystemExit("No presets were built. Check ConfigPresets/*/Config.gd")
+	raise SystemExit("No presets were built. Check presets/*/Config.gd")
 PY
 
 echo "Done building preset VMZ files in $OUT_DIR"

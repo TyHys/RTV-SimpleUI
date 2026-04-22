@@ -2,13 +2,14 @@ extends Node
 
 ## Same pattern as BikeMod: path from scene tree root, not "/root/Map/..." (that breaks when resolved from root).
 const SimpleHUDConfigScript := preload("res://SimpleHUD/Config.gd")
+const SimpleHudOverlay := preload("res://SimpleHUD/HudOverlay.gd")
 
 var game_data: Resource = preload("res://Resources/GameData.tres")
 
 var _cfg: RefCounted
 var _hud: Control
 var _canvas_layer: CanvasLayer
-var _overlay: Control
+var _overlay: SimpleHudOverlay
 
 ## Runtime `GameData` the game mutates (often not the same object identity as preload if the scene holds a live ref).
 var _live_game_data: Resource = null
@@ -45,8 +46,7 @@ func _bind_hud(hud: Control) -> void:
 	_canvas_layer.follow_viewport_enabled = true
 	get_tree().root.add_child(_canvas_layer)
 
-	var hud_overlay_script: GDScript = load("res://SimpleHUD/HudOverlay.gd") as GDScript
-	_overlay = hud_overlay_script.new() as Control
+	_overlay = SimpleHudOverlay.new()
 	_overlay.setup(game_data, _cfg)
 	_overlay.visible = true
 	_canvas_layer.add_child(_overlay)
@@ -65,14 +65,12 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	var vitals_on: bool = _prefs_bool(prefs, &"vitals", true)
 	var medical_on: bool = _prefs_bool(prefs, &"medical", true)
 
-	if _overlay.has_method("configure_hud_prefs"):
-		_overlay.call("configure_hud_prefs", vitals_on, medical_on)
+	_overlay.configure_hud_prefs(vitals_on, medical_on)
 
 	_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
 
 	var live := _resolve_live_game_data(hud)
-	if _overlay.has_method("set_live_game_data"):
-		_overlay.call("set_live_game_data", live)
+	_overlay.set_live_game_data(live)
 
 	var menu_hide: bool = false
 	if live != null:
@@ -83,11 +81,10 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	# and left the overlay blank (no updates, widgets never filled in).
 	var show_layer: bool = !menu_hide
 
-	if _overlay.has_method("layout_for_viewport"):
-		_overlay.call("layout_for_viewport", get_viewport().get_visible_rect().size, show_layer)
+	_overlay.layout_for_viewport(get_viewport().get_visible_rect().size, show_layer)
 
-	if show_layer && _overlay.has_method("tick"):
-		_overlay.call("tick", delta)
+	if show_layer:
+		_overlay.tick(delta)
 
 	_apply_fps_map(hud, prefs)
 

@@ -16,12 +16,12 @@ This README is for maintainers/contributors, not end users.
   Active runtime configuration class (full parser + defaults + helpers).
 - `SimpleHUD/widgets/*`  
   UI widgets (`StatWidget`, `RadialStat`, `StatusTray`).
-- `SimpleHUD/widgets/ConfigPresets/*/Config.gd`  
-  Full preset config variants intended to be drop-in replacements for `SimpleHUD/Config.gd`.
+- `presets/<PresetName>/Config.gd`  
+  Full preset config variants (standalone folder at repo root; **not** shipped inside VMZs—each build injects one as `SimpleHUD/Config.gd`).
 - `SimpleHUD.default.ini`  
   Packaged default INI (included in VMZ build).
 - `build_simplehud_vmz.sh`  
-  Build script for `mod/SimpleHUD.vmz`.
+  Builds `mod/SimpleUI-<PresetName>.vmz` per folder under `presets/`.
 
 ## Preset Model
 
@@ -71,23 +71,26 @@ From `SimpleHUD/`:
 ./build_simplehud_vmz.sh
 ```
 
-Build output:
+Build output (`mod/`):
 
-- `SimpleHUD/mod/SimpleHUD.vmz`
+- `SimpleUI-<PresetName>.vmz` — one archive per preset under `presets/`.
 
-The build bundles:
+Each VMZ bundles only:
 
 - `mod.txt`
 - `SimpleHUD.default.ini`
-- `SimpleHUD/`
-- `Docs/` (if present)
+- `SimpleHUD/` (runtime tree without preset sources)
+
+Documentation under `Docs/` stays in the repo only—it is **not** copied into VMZs.
+
+The matching `presets/<PresetName>/Config.gd` is copied onto `SimpleHUD/Config.gd` when staging each zip (preset folders themselves are **not** included).
 
 ## Development Workflow
 
 1. Choose target mode (text/radial + plain/color).
-2. Edit active `SimpleHUD/Config.gd` or replace with a preset `Config.gd`.
+2. Edit active `SimpleHUD/Config.gd` or copy from `presets/<Name>/Config.gd`.
 3. Verify in-game behavior (thresholds, alpha, placement, icon rendering).
-4. Rebuild VMZ.
+4. Rebuild VMZs (`./build_simplehud_vmz.sh`).
 5. Keep `SimpleHUD.default.ini` aligned with intended shipped default behavior.
 
 ## Reference Docs
