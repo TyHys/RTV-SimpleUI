@@ -126,11 +126,13 @@ func tick() -> void:
 		var th: float = float(_cfg.get_threshold(sid))
 		var show_stat: bool = p <= th
 		var use_radial: bool = bool(_cfg.get_radial(sid))
-		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
-		var alpha: float = computed
-		if show_stat && sid != SimpleHUDConfigScript.STAT_HEALTH:
-			var fl: float = float(_cfg.min_stat_alpha_floor)
-			alpha = maxf(computed, fl)
+		var alpha: float = 1.0
+		if !use_radial:
+			var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
+			alpha = computed
+			if show_stat && sid != SimpleHUDConfigScript.STAT_HEALTH:
+				var fl: float = float(_cfg.min_stat_alpha_floor)
+				alpha = maxf(computed, fl)
 
 		var w: Control = _widgets.get(sid)
 		if w && w.has_method("update_display"):

@@ -3,36 +3,34 @@ extends RefCounted
 ## Loaded via preload from Main/HudOverlay — do not rely on global class_name (mod autoload order).
 
 const DEFAULT_RES := "res://SimpleHUD.default.ini"
-const PRESET_TEXT_NUMERIC := "Text-Numeric"
 
 ## Godot ConfigFile does not allow `#` comments; keep file and this string in sync (used if res load fails).
 const EMBEDDED_DEFAULTS_INI := """[general]
 enabled=true
-preset="Text-Numeric"
 min_stat_alpha_floor=0
 log=true
-numeric_only=true
+numeric_only=false
 [health]
 visible_threshold=101.0
-radial=false
+radial=true
 [energy]
 visible_threshold=79.0
-radial=false
+radial=true
 [hydration]
 visible_threshold=79.0
-radial=false
+radial=true
 [mental]
 visible_threshold=79.0
-radial=false
+radial=true
 [body_temp]
 visible_threshold=79.0
-radial=false
+radial=true
 [stamina]
 visible_threshold=50.0
-radial=false
+radial=true
 [fatigue]
 visible_threshold=50.0
-radial=false
+radial=true
 [status_icons]
 mode=\"inflicted_only\"
 corner=\"bottom_right\"
@@ -90,7 +88,6 @@ const STAT_IDS: Array[StringName] = [
 ]
 
 var enabled: bool = true
-var preset: String = PRESET_TEXT_NUMERIC
 
 var radial: Dictionary = {} # stat_id -> bool
 var visible_threshold: Dictionary = {} # stat_id -> float
@@ -136,7 +133,7 @@ var min_stat_alpha_floor: float = 0.0
 var log_enabled: bool = true
 
 ## When true, vitals always use text labels (ignores per-stat radial in INI).
-var numeric_only: bool = true
+var numeric_only: bool = false
 
 var _loaded_user_path: String = ""
 
@@ -176,14 +173,8 @@ func _load_file(path: String, merge: bool) -> void:
 
 
 func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
-	if cf.has_section_key("general", "preset"):
-		preset = str(cf.get_value("general", "preset"))
-	_apply_preset(preset)
-
 	if cf.has_section_key("general", "enabled"):
 		enabled = bool(cf.get_value("general", "enabled"))
-	if cf.has_section_key("general", "preset"):
-		preset = str(cf.get_value("general", "preset"))
 	if cf.has_section_key("general", "min_stat_alpha_floor"):
 		min_stat_alpha_floor = clampf(float(cf.get_value("general", "min_stat_alpha_floor")), 0.0, 1.0)
 	if cf.has_section_key("general", "log"):
@@ -273,7 +264,6 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 
 func apply_defaults() -> void:
 	enabled = true
-	preset = PRESET_TEXT_NUMERIC
 	radial.clear()
 	visible_threshold.clear()
 	for id in STAT_IDS:
@@ -284,7 +274,7 @@ func apply_defaults() -> void:
 				visible_threshold[id] = 50.0
 			_:
 				visible_threshold[id] = 79.0
-		radial[id] = false
+		radial[id] = true
 	status_mode = "inflicted_only"
 	status_corner = "bottom_right"
 	status_spacing_px = 2.0
@@ -303,7 +293,7 @@ func apply_defaults() -> void:
 	fps_map_offset_y = 4.0
 	min_stat_alpha_floor = 0.0
 	log_enabled = true
-	numeric_only = true
+	numeric_only = false
 	vitals_margin_left = 8.0
 	vitals_margin_bottom = 5.0
 	vitals_strip_width_px = 960.0
@@ -320,63 +310,6 @@ func apply_defaults() -> void:
 	stat_text_low_r = 120
 	stat_text_low_g = 0
 	stat_text_low_b = 0
-
-func _apply_preset(name: String) -> void:
-	match name:
-		PRESET_TEXT_NUMERIC:
-			numeric_only = true
-			vitals_margin_left = 8.0
-			vitals_margin_bottom = 5.0
-			vitals_strip_width_px = 960.0
-			vitals_row_height_px = 36.0
-			status_spacing_px = 2.0
-			status_icon_scale = 0.12
-			status_icon_size_px = 32.0
-			status_margin_right = 5.0
-			status_margin_bottom = 5.0
-			status_color_r = 120
-			status_color_g = 0
-			status_color_b = 0
-			stat_text_color_mode = "gradient"
-			stat_text_high_start_pct = 75.0
-			stat_text_mid_pct = 50.0
-			stat_text_high_r = 255
-			stat_text_high_g = 255
-			stat_text_high_b = 255
-			stat_text_mid_r = 120
-			stat_text_mid_g = 110
-			stat_text_mid_b = 0
-			stat_text_low_r = 120
-			stat_text_low_g = 0
-			stat_text_low_b = 0
-		_:
-			# Unknown preset names fall back to Text-Numeric.
-			preset = PRESET_TEXT_NUMERIC
-			numeric_only = true
-			vitals_margin_left = 8.0
-			vitals_margin_bottom = 5.0
-			vitals_strip_width_px = 960.0
-			vitals_row_height_px = 36.0
-			status_spacing_px = 2.0
-			status_icon_scale = 0.12
-			status_icon_size_px = 32.0
-			status_margin_right = 5.0
-			status_margin_bottom = 5.0
-			status_color_r = 120
-			status_color_g = 0
-			status_color_b = 0
-			stat_text_color_mode = "gradient"
-			stat_text_high_start_pct = 75.0
-			stat_text_mid_pct = 50.0
-			stat_text_high_r = 255
-			stat_text_high_g = 255
-			stat_text_high_b = 255
-			stat_text_mid_r = 120
-			stat_text_mid_g = 110
-			stat_text_mid_b = 0
-			stat_text_low_r = 120
-			stat_text_low_g = 0
-			stat_text_low_b = 0
 
 func get_status_icon_color() -> Color:
 	return Color8(status_color_r, status_color_g, status_color_b, 255)
