@@ -35,12 +35,12 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 
 	var defs: Array = [
 		[SimpleHUDConfigScript.STAT_HEALTH, "HP"],
-		[SimpleHUDConfigScript.STAT_ENERGY, "Food"],
+		[SimpleHUDConfigScript.STAT_ENERGY, "EN"],
 		[SimpleHUDConfigScript.STAT_HYDRATION, "HY"],
 		[SimpleHUDConfigScript.STAT_MENTAL, "MN"],
 		[SimpleHUDConfigScript.STAT_BODY_TEMP, "TP"],
 		[SimpleHUDConfigScript.STAT_STAMINA, "ST"],
-		[SimpleHUDConfigScript.STAT_FATIGUE, "RF"],
+		[SimpleHUDConfigScript.STAT_FATIGUE, "FT"],
 	]
 
 	for d in defs:
@@ -99,15 +99,16 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 	_stats_root.offset_right = corner_m + strip_w
 	_stats_root.offset_bottom = -corner_mb
 
-	var margin := 48.0
-
 	if _tray:
 		_tray.visible = _prefs_medical
 		_tray.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		_tray.offset_left = -320.0 - margin
-		_tray.offset_right = -margin
-		_tray.offset_top = -360.0 - margin
-		_tray.offset_bottom = -margin
+		var tray_size: Vector2 = _tray.get_combined_minimum_size()
+		var tray_right: float = float(_cfg.status_margin_right)
+		var tray_bottom: float = float(_cfg.status_margin_bottom)
+		_tray.offset_right = -tray_right
+		_tray.offset_bottom = -tray_bottom
+		_tray.offset_left = -tray_right - tray_size.x
+		_tray.offset_top = -tray_bottom - tray_size.y
 
 
 func tick() -> void:

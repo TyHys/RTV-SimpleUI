@@ -103,11 +103,12 @@ func refresh() -> void:
 		tr.texture = tex
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tr.custom_minimum_size = Vector2(28, 28) * _cfg.status_icon_scale
+		var active_color: Color = _cfg.get_status_icon_color()
 		match mode:
 			"always":
-				tr.modulate = Color.WHITE if active else Color(1, 1, 1, 0.25)
+				tr.modulate = active_color if active else Color(active_color.r, active_color.g, active_color.b, 0.25)
 			_:
-				tr.modulate = Color.WHITE
+				tr.modulate = active_color
 
 		_box.add_child(tr)
 

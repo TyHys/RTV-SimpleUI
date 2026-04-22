@@ -3,10 +3,12 @@ extends RefCounted
 ## Loaded via preload from Main/HudOverlay — do not rely on global class_name (mod autoload order).
 
 const DEFAULT_RES := "res://SimpleHUD.default.ini"
+const PRESET_TEXT_NUMERIC := "Text-Numeric"
 
 ## Godot ConfigFile does not allow `#` comments; keep file and this string in sync (used if res load fails).
 const EMBEDDED_DEFAULTS_INI := """[general]
 enabled=true
+preset="Text-Numeric"
 min_stat_alpha_floor=0
 log=true
 numeric_only=true
@@ -34,9 +36,14 @@ radial=false
 [status_icons]
 mode=\"inflicted_only\"
 corner=\"bottom_right\"
-spacing_px=6
-icon_scale=1.0
+spacing_px=2
+icon_scale=0.6
 stack_direction=\"vertical_up\"
+margin_right=5
+margin_bottom=5
+color_r=120
+color_g=0
+color_b=0
 [fps_map]
 alpha=0.5
 scale=0.81
@@ -45,9 +52,9 @@ offset_x=4
 offset_y=4
 [vitals_layout]
 margin_left=8
-margin_bottom=8
+margin_bottom=5
 strip_width_px=960
-row_height_px=52
+row_height_px=36
 """
 
 const STAT_HEALTH := &"health"
@@ -69,15 +76,21 @@ const STAT_IDS: Array[StringName] = [
 ]
 
 var enabled: bool = true
+var preset: String = PRESET_TEXT_NUMERIC
 
 var radial: Dictionary = {} # stat_id -> bool
 var visible_threshold: Dictionary = {} # stat_id -> float
 
 var status_mode: String = "inflicted_only"
 var status_corner: String = "bottom_right"
-var status_spacing_px: float = 6.0
-var status_icon_scale: float = 1.0
+var status_spacing_px: float = 2.0
+var status_icon_scale: float = 0.6
 var status_stack_direction: String = "vertical_up"
+var status_margin_right: float = 5.0
+var status_margin_bottom: float = 5.0
+var status_color_r: int = 120
+var status_color_g: int = 0
+var status_color_b: int = 0
 
 var fps_map_alpha: float = 0.5
 var fps_map_scale: float = 0.81
@@ -86,9 +99,9 @@ var fps_map_offset_x: float = 4.0
 var fps_map_offset_y: float = 4.0
 
 var vitals_margin_left: float = 8.0
-var vitals_margin_bottom: float = 8.0
+var vitals_margin_bottom: float = 5.0
 var vitals_strip_width_px: float = 960.0
-var vitals_row_height_px: float = 52.0
+var vitals_row_height_px: float = 36.0
 
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
@@ -136,8 +149,14 @@ func _load_file(path: String, merge: bool) -> void:
 
 
 func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
+	if cf.has_section_key("general", "preset"):
+		preset = str(cf.get_value("general", "preset"))
+	_apply_preset(preset)
+
 	if cf.has_section_key("general", "enabled"):
 		enabled = bool(cf.get_value("general", "enabled"))
+	if cf.has_section_key("general", "preset"):
+		preset = str(cf.get_value("general", "preset"))
 	if cf.has_section_key("general", "min_stat_alpha_floor"):
 		min_stat_alpha_floor = clampf(float(cf.get_value("general", "min_stat_alpha_floor")), 0.0, 1.0)
 	if cf.has_section_key("general", "log"):
@@ -164,6 +183,16 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			status_icon_scale = clampf(float(cf.get_value("status_icons", "icon_scale")), 0.25, 4.0)
 		if cf.has_section_key("status_icons", "stack_direction"):
 			status_stack_direction = str(cf.get_value("status_icons", "stack_direction"))
+		if cf.has_section_key("status_icons", "margin_right"):
+			status_margin_right = clampf(float(cf.get_value("status_icons", "margin_right")), 0.0, 256.0)
+		if cf.has_section_key("status_icons", "margin_bottom"):
+			status_margin_bottom = clampf(float(cf.get_value("status_icons", "margin_bottom")), 0.0, 256.0)
+		if cf.has_section_key("status_icons", "color_r"):
+			status_color_r = clampi(int(cf.get_value("status_icons", "color_r")), 0, 255)
+		if cf.has_section_key("status_icons", "color_g"):
+			status_color_g = clampi(int(cf.get_value("status_icons", "color_g")), 0, 255)
+		if cf.has_section_key("status_icons", "color_b"):
+			status_color_b = clampi(int(cf.get_value("status_icons", "color_b")), 0, 255)
 
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
@@ -189,6 +218,7 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 
 func apply_defaults() -> void:
 	enabled = true
+	preset = PRESET_TEXT_NUMERIC
 	radial.clear()
 	visible_threshold.clear()
 	for id in STAT_IDS:
@@ -202,9 +232,14 @@ func apply_defaults() -> void:
 		radial[id] = false
 	status_mode = "inflicted_only"
 	status_corner = "bottom_right"
-	status_spacing_px = 6.0
-	status_icon_scale = 1.0
+	status_spacing_px = 2.0
+	status_icon_scale = 0.6
 	status_stack_direction = "vertical_up"
+	status_margin_right = 5.0
+	status_margin_bottom = 5.0
+	status_color_r = 120
+	status_color_g = 0
+	status_color_b = 0
 	fps_map_alpha = 0.5
 	fps_map_scale = 0.81
 	fps_map_anchor = "top_left"
@@ -214,9 +249,43 @@ func apply_defaults() -> void:
 	log_enabled = true
 	numeric_only = true
 	vitals_margin_left = 8.0
-	vitals_margin_bottom = 8.0
+	vitals_margin_bottom = 5.0
 	vitals_strip_width_px = 960.0
-	vitals_row_height_px = 52.0
+	vitals_row_height_px = 36.0
+
+func _apply_preset(name: String) -> void:
+	match name:
+		PRESET_TEXT_NUMERIC:
+			numeric_only = true
+			vitals_margin_left = 8.0
+			vitals_margin_bottom = 5.0
+			vitals_strip_width_px = 960.0
+			vitals_row_height_px = 36.0
+			status_spacing_px = 2.0
+			status_icon_scale = 0.6
+			status_margin_right = 5.0
+			status_margin_bottom = 5.0
+			status_color_r = 120
+			status_color_g = 0
+			status_color_b = 0
+		_:
+			# Unknown preset names fall back to Text-Numeric.
+			preset = PRESET_TEXT_NUMERIC
+			numeric_only = true
+			vitals_margin_left = 8.0
+			vitals_margin_bottom = 5.0
+			vitals_strip_width_px = 960.0
+			vitals_row_height_px = 36.0
+			status_spacing_px = 2.0
+			status_icon_scale = 0.6
+			status_margin_right = 5.0
+			status_margin_bottom = 5.0
+			status_color_r = 120
+			status_color_g = 0
+			status_color_b = 0
+
+func get_status_icon_color() -> Color:
+	return Color8(status_color_r, status_color_g, status_color_b, 255)
 
 func get_loaded_user_ini_path() -> String:
 	return _loaded_user_path
