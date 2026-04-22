@@ -164,6 +164,29 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 	var a: float = clampf(float(_cfg.fps_map_alpha), 0.0, 1.0)
 	info.modulate = Color(1.0, 1.0, 1.0, a)
 
+	# Keep only the numeric FPS readout and force it white for readability.
+	var fps_label := info.get_node_or_null("FPS") as Label
+	if fps_label != null:
+		var fps_text := fps_label.text.strip_edges()
+		if fps_text.begins_with("FPS"):
+			fps_text = fps_text.trim_prefix("FPS")
+			if fps_text.begins_with(":"):
+				fps_text = fps_text.trim_prefix(":")
+			fps_text = fps_text.strip_edges()
+		fps_label.text = fps_text
+		fps_label.add_theme_color_override("font_color", Color.WHITE)
+
+	var fps_value := info.get_node_or_null("FPS/Frames") as Label
+	if fps_value != null:
+		var val_text := fps_value.text.strip_edges()
+		if val_text.begins_with("FPS"):
+			val_text = val_text.trim_prefix("FPS")
+			if val_text.begins_with(":"):
+				val_text = val_text.trim_prefix(":")
+			val_text = val_text.strip_edges()
+		fps_value.text = val_text
+		fps_value.add_theme_color_override("font_color", Color.WHITE)
+
 
 func _clear_binding() -> void:
 	if is_instance_valid(_canvas_layer):
