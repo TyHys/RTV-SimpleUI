@@ -10,7 +10,6 @@ const LOAD_USER_INI := false
 const EMBEDDED_DEFAULTS_INI := """[general]
 enabled=true
 min_stat_alpha_floor=0
-log=true
 numeric_only=false
 [health]
 visible_threshold=101.0
@@ -132,8 +131,6 @@ var stat_text_low_b: int = 15
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
 
-var log_enabled: bool = true
-
 ## When true, vitals always use text labels (ignores per-stat radial in INI).
 var numeric_only: bool = false
 
@@ -151,11 +148,6 @@ func load_all() -> void:
 		_loaded_user_path = ""
 
 func _resolve_user_ini_path() -> String:
-	if OS.has_feature("windows"):
-		var appdata := OS.get_environment("APPDATA")
-		if appdata != "":
-			var p := appdata.path_join("Road to Vostok").path_join("simplehud.ini")
-			return p
 	return "user://simplehud.ini"
 
 func _load_file(path: String, merge: bool) -> void:
@@ -180,8 +172,6 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		enabled = bool(cf.get_value("general", "enabled"))
 	if cf.has_section_key("general", "min_stat_alpha_floor"):
 		min_stat_alpha_floor = clampf(float(cf.get_value("general", "min_stat_alpha_floor")), 0.0, 1.0)
-	if cf.has_section_key("general", "log"):
-		log_enabled = bool(cf.get_value("general", "log"))
 	if cf.has_section_key("general", "numeric_only"):
 		numeric_only = bool(cf.get_value("general", "numeric_only"))
 
@@ -295,7 +285,6 @@ func apply_defaults() -> void:
 	fps_map_offset_x = 4.0
 	fps_map_offset_y = 4.0
 	min_stat_alpha_floor = 0.0
-	log_enabled = true
 	numeric_only = false
 	vitals_margin_left = 8.0
 	vitals_margin_bottom = 5.0

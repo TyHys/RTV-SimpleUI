@@ -2,7 +2,6 @@ extends Node
 
 ## Same pattern as BikeMod: path from scene tree root, not "/root/Map/..." (that breaks when resolved from root).
 const SimpleHUDConfigScript := preload("res://SimpleHUD/Config.gd")
-const SimpleHudLog := preload("res://SimpleHUD/SimpleHudLog.gd")
 
 var game_data: Resource = preload("res://Resources/GameData.tres")
 
@@ -14,21 +13,10 @@ var _overlay: Control
 ## Runtime `GameData` the game mutates (often not the same object identity as preload if the scene holds a live ref).
 var _live_game_data: Resource = null
 
-var _logged_live_resolve: bool = false
-var _logged_game_data_snapshot: bool = false
-var _logged_prefs_snapshot: bool = false
-
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_cfg = SimpleHUDConfigScript.new()
 	_cfg.load_all()
-	SimpleHudLog.configure(bool(_cfg.log_enabled))
-	SimpleHudLog.info("SimpleHUD start | log=%s path=%s | user_ini=%s" % [
-		str(_cfg.log_enabled),
-		SimpleHudLog.resolve_log_path(),
-		_cfg.get_loaded_user_ini_path(),
-	])
 
 
 func _process(delta: float) -> void:
@@ -65,9 +53,6 @@ func _bind_hud(hud: Control) -> void:
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	SimpleHudLog.info(
-		"HUD bound %s hud_visible=%s vitals_on_CanvasLayer(root)" % [str(hud.get_path()), str(hud.visible)],
-	)
 	_apply_overlay(hud, 0.0)
 
 
@@ -85,31 +70,9 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 
 	_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
 
-	if SimpleHudLog.is_enabled() && !_logged_prefs_snapshot:
-		_logged_prefs_snapshot = true
-		SimpleHudLog.info("Preferences snapshot vitals=%s medical=%s" % [str(vitals_on), str(medical_on)])
-
 	var live := _resolve_live_game_data(hud)
 	if _overlay.has_method("set_live_game_data"):
 		_overlay.call("set_live_game_data", live)
-
-	if SimpleHudLog.is_enabled() && !_logged_live_resolve && live != null && live != game_data:
-		_logged_live_resolve = true
-		SimpleHudLog.info("Resolved live GameData (scene tree); preload identity differed")
-
-	if SimpleHudLog.is_enabled() && !_logged_game_data_snapshot && live != null:
-		_logged_game_data_snapshot = true
-		SimpleHudLog.info(
-			"GameData snapshot same_as_preload=%s hydration=%s energy=%s health=%s menu=%s path=%s"
-			% [
-				str(live == game_data),
-				str(live.get("hydration")),
-				str(live.get("energy")),
-				str(live.get("health")),
-				str(live.get("menu")),
-				str(live.resource_path),
-			],
-		)
 
 	var menu_hide: bool = false
 	if live != null:
@@ -194,18 +157,13 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 
 func _clear_binding() -> void:
 	if is_instance_valid(_canvas_layer):
-		SimpleHudLog.info("HUD cleared")
 		_canvas_layer.queue_free()
 	elif is_instance_valid(_overlay):
-		SimpleHudLog.info("HUD cleared")
 		_overlay.queue_free()
 	_canvas_layer = null
 	_overlay = null
 	_hud = null
 	_live_game_data = null
-	_logged_live_resolve = false
-	_logged_game_data_snapshot = false
-	_logged_prefs_snapshot = false
 
 
 func _resolve_live_game_data(for_hud: Control) -> Resource:
