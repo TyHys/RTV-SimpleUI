@@ -56,6 +56,19 @@ margin_left=8
 margin_bottom=5
 strip_width_px=960
 row_height_px=36
+[stat_text_colors]
+mode=\"gradient\"
+high_start_pct=75
+mid_pct=50
+high_r=255
+high_g=255
+high_b=255
+mid_r=120
+mid_g=110
+mid_b=0
+low_r=120
+low_g=0
+low_b=0
 """
 
 const STAT_HEALTH := &"health"
@@ -104,6 +117,18 @@ var vitals_margin_left: float = 8.0
 var vitals_margin_bottom: float = 5.0
 var vitals_strip_width_px: float = 960.0
 var vitals_row_height_px: float = 36.0
+var stat_text_color_mode: String = "gradient" # gradient | white_only
+var stat_text_high_start_pct: float = 75.0
+var stat_text_mid_pct: float = 50.0
+var stat_text_high_r: int = 255
+var stat_text_high_g: int = 255
+var stat_text_high_b: int = 255
+var stat_text_mid_r: int = 120
+var stat_text_mid_g: int = 110
+var stat_text_mid_b: int = 0
+var stat_text_low_r: int = 120
+var stat_text_low_g: int = 0
+var stat_text_low_b: int = 0
 
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
@@ -220,6 +245,32 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		if cf.has_section_key("vitals_layout", "row_height_px"):
 			vitals_row_height_px = clampf(float(cf.get_value("vitals_layout", "row_height_px")), 16.0, 256.0)
 
+	if cf.has_section("stat_text_colors"):
+		if cf.has_section_key("stat_text_colors", "mode"):
+			stat_text_color_mode = str(cf.get_value("stat_text_colors", "mode"))
+		if cf.has_section_key("stat_text_colors", "high_start_pct"):
+			stat_text_high_start_pct = clampf(float(cf.get_value("stat_text_colors", "high_start_pct")), 0.0, 100.0)
+		if cf.has_section_key("stat_text_colors", "mid_pct"):
+			stat_text_mid_pct = clampf(float(cf.get_value("stat_text_colors", "mid_pct")), 0.0, 100.0)
+		if cf.has_section_key("stat_text_colors", "high_r"):
+			stat_text_high_r = clampi(int(cf.get_value("stat_text_colors", "high_r")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "high_g"):
+			stat_text_high_g = clampi(int(cf.get_value("stat_text_colors", "high_g")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "high_b"):
+			stat_text_high_b = clampi(int(cf.get_value("stat_text_colors", "high_b")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "mid_r"):
+			stat_text_mid_r = clampi(int(cf.get_value("stat_text_colors", "mid_r")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "mid_g"):
+			stat_text_mid_g = clampi(int(cf.get_value("stat_text_colors", "mid_g")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "mid_b"):
+			stat_text_mid_b = clampi(int(cf.get_value("stat_text_colors", "mid_b")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "low_r"):
+			stat_text_low_r = clampi(int(cf.get_value("stat_text_colors", "low_r")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "low_g"):
+			stat_text_low_g = clampi(int(cf.get_value("stat_text_colors", "low_g")), 0, 255)
+		if cf.has_section_key("stat_text_colors", "low_b"):
+			stat_text_low_b = clampi(int(cf.get_value("stat_text_colors", "low_b")), 0, 255)
+
 func apply_defaults() -> void:
 	enabled = true
 	preset = PRESET_TEXT_NUMERIC
@@ -257,6 +308,18 @@ func apply_defaults() -> void:
 	vitals_margin_bottom = 5.0
 	vitals_strip_width_px = 960.0
 	vitals_row_height_px = 36.0
+	stat_text_color_mode = "gradient"
+	stat_text_high_start_pct = 75.0
+	stat_text_mid_pct = 50.0
+	stat_text_high_r = 255
+	stat_text_high_g = 255
+	stat_text_high_b = 255
+	stat_text_mid_r = 120
+	stat_text_mid_g = 110
+	stat_text_mid_b = 0
+	stat_text_low_r = 120
+	stat_text_low_g = 0
+	stat_text_low_b = 0
 
 func _apply_preset(name: String) -> void:
 	match name:
@@ -274,6 +337,18 @@ func _apply_preset(name: String) -> void:
 			status_color_r = 120
 			status_color_g = 0
 			status_color_b = 0
+			stat_text_color_mode = "gradient"
+			stat_text_high_start_pct = 75.0
+			stat_text_mid_pct = 50.0
+			stat_text_high_r = 255
+			stat_text_high_g = 255
+			stat_text_high_b = 255
+			stat_text_mid_r = 120
+			stat_text_mid_g = 110
+			stat_text_mid_b = 0
+			stat_text_low_r = 120
+			stat_text_low_g = 0
+			stat_text_low_b = 0
 		_:
 			# Unknown preset names fall back to Text-Numeric.
 			preset = PRESET_TEXT_NUMERIC
@@ -290,9 +365,43 @@ func _apply_preset(name: String) -> void:
 			status_color_r = 120
 			status_color_g = 0
 			status_color_b = 0
+			stat_text_color_mode = "gradient"
+			stat_text_high_start_pct = 75.0
+			stat_text_mid_pct = 50.0
+			stat_text_high_r = 255
+			stat_text_high_g = 255
+			stat_text_high_b = 255
+			stat_text_mid_r = 120
+			stat_text_mid_g = 110
+			stat_text_mid_b = 0
+			stat_text_low_r = 120
+			stat_text_low_g = 0
+			stat_text_low_b = 0
 
 func get_status_icon_color() -> Color:
 	return Color8(status_color_r, status_color_g, status_color_b, 255)
+
+func get_stat_text_color(percent: float) -> Color:
+	var hi := Color8(stat_text_high_r, stat_text_high_g, stat_text_high_b, 255)
+	if stat_text_color_mode == "white_only":
+		return hi
+
+	var mid := Color8(stat_text_mid_r, stat_text_mid_g, stat_text_mid_b, 255)
+	var low := Color8(stat_text_low_r, stat_text_low_g, stat_text_low_b, 255)
+	var p := clampf(percent, 0.0, 100.0)
+	var hi_start := clampf(stat_text_high_start_pct, 0.0, 100.0)
+	var mid_at := clampf(stat_text_mid_pct, 0.0, hi_start)
+
+	if p >= hi_start:
+		return hi
+	if p >= mid_at:
+		var den_hi := maxf(0.001, hi_start - mid_at)
+		var t_hi := (hi_start - p) / den_hi
+		return hi.lerp(mid, clampf(t_hi, 0.0, 1.0))
+
+	var den_low := maxf(0.001, mid_at)
+	var t_low := (mid_at - p) / den_low
+	return mid.lerp(low, clampf(t_low, 0.0, 1.0))
 
 func get_loaded_user_ini_path() -> String:
 	return _loaded_user_path

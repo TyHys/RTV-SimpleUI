@@ -9,10 +9,13 @@ var _label: Label
 var _radial: Control
 var _caption: Label
 var _built_radial: bool = false
+var _cfg: RefCounted
 
-func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_radial: bool) -> void:
+func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_radial: bool, cfg: RefCounted = null) -> void:
 	stat_id = p_stat_id
 	title = p_title
+	if cfg != null:
+		_cfg = cfg
 
 	for c in get_children():
 		c.queue_free()
@@ -57,7 +60,7 @@ func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_rad
 
 func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_mult: float) -> void:
 	if use_radial != _built_radial:
-		setup(stat_id, title, null, use_radial)
+		setup(stat_id, title, null, use_radial, _cfg)
 
 	modulate.a = alpha_mult
 	visible = visible_rule
@@ -71,3 +74,13 @@ func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_
 			_caption.text = "%s %d" % [title, int(round(percent))]
 	elif _label:
 		_label.text = "%s %d" % [title, int(round(percent))]
+	_apply_text_color(percent)
+
+func _apply_text_color(percent: float) -> void:
+	var c := Color.WHITE
+	if _cfg != null && _cfg.has_method("get_stat_text_color"):
+		c = _cfg.call("get_stat_text_color", percent)
+	if _caption:
+		_caption.add_theme_color_override("font_color", c)
+	if _label:
+		_label.add_theme_color_override("font_color", c)

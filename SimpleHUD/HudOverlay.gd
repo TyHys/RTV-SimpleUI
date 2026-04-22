@@ -47,7 +47,7 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 		var sid: StringName = d[0]
 		var ttl: String = d[1]
 		var sw: Control = STAT_WIDGET_SCRIPT.new() as Control
-		sw.setup(sid, ttl, game_data, cfg.get_radial(sid))
+		sw.setup(sid, ttl, game_data, cfg.get_radial(sid), cfg)
 		_widgets[sid] = sw
 		_vitals_box.add_child(sw)
 
