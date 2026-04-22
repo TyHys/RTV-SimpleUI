@@ -31,7 +31,7 @@ func _ready() -> void:
 	])
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if !_cfg.enabled:
 		return
 
@@ -41,7 +41,7 @@ func _process(_delta: float) -> void:
 		return
 
 	if _hud == hud && is_instance_valid(_overlay):
-		_apply_overlay(hud)
+		_apply_overlay(hud, delta)
 		return
 
 	_bind_hud(hud)
@@ -68,10 +68,10 @@ func _bind_hud(hud: Control) -> void:
 	SimpleHudLog.info(
 		"HUD bound %s hud_visible=%s vitals_on_CanvasLayer(root)" % [str(hud.get_path()), str(hud.visible)],
 	)
-	_apply_overlay(hud)
+	_apply_overlay(hud, 0.0)
 
 
-func _apply_overlay(hud: Control) -> void:
+func _apply_overlay(hud: Control, delta: float) -> void:
 	if !is_instance_valid(_overlay):
 		return
 
@@ -124,7 +124,7 @@ func _apply_overlay(hud: Control) -> void:
 		_overlay.call("layout_for_viewport", get_viewport().get_visible_rect().size, show_layer)
 
 	if show_layer && _overlay.has_method("tick"):
-		_overlay.call("tick")
+		_overlay.call("tick", delta)
 
 	_apply_fps_map(hud, prefs)
 

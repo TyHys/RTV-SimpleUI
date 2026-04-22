@@ -12,6 +12,7 @@ enabled=true
 min_stat_alpha_floor=0
 log=true
 numeric_only=false
+stamina_fatigue_near_zero_cutoff=1.0
 [health]
 visible_threshold=101.0
 radial=true
@@ -136,6 +137,8 @@ var log_enabled: bool = true
 
 ## When true, vitals always use text labels (ignores per-stat radial in INI).
 var numeric_only: bool = false
+## Clamp stamina/fatigue display to 0 when value is below this percent value.
+var stamina_fatigue_near_zero_cutoff: float = 1.0
 
 var _loaded_user_path: String = ""
 
@@ -184,6 +187,8 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		log_enabled = bool(cf.get_value("general", "log"))
 	if cf.has_section_key("general", "numeric_only"):
 		numeric_only = bool(cf.get_value("general", "numeric_only"))
+	if cf.has_section_key("general", "stamina_fatigue_near_zero_cutoff"):
+		stamina_fatigue_near_zero_cutoff = clampf(float(cf.get_value("general", "stamina_fatigue_near_zero_cutoff")), 0.0, 5.0)
 
 	for stat_id in STAT_IDS:
 		var sec := stat_id
@@ -297,6 +302,7 @@ func apply_defaults() -> void:
 	min_stat_alpha_floor = 0.0
 	log_enabled = true
 	numeric_only = false
+	stamina_fatigue_near_zero_cutoff = 1.0
 	vitals_margin_left = 8.0
 	vitals_margin_bottom = 5.0
 	vitals_strip_width_px = 960.0
