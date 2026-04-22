@@ -2,13 +2,13 @@ extends Control
 
 const RADIAL_SCRIPT := preload("res://SimpleHUD/widgets/RadialStat.gd")
 const STAT_ICON_PATHS := {
-	&"health": "res://SimpleHUD/icons/health.png",
-	&"energy": "res://SimpleHUD/icons/energy.png",
-	&"hydration": "res://SimpleHUD/icons/hydration.png",
-	&"mental": "res://SimpleHUD/icons/mental.png",
-	&"body_temp": "res://SimpleHUD/icons/bodytemp.png",
-	&"stamina": "res://SimpleHUD/icons/stamina.png",
-	&"fatigue": "res://SimpleHUD/icons/fatigue.png",
+	&"health": "res://SimpleHUD/icons/hp_icon.png",
+	&"energy": "res://SimpleHUD/icons/hunger_icon.png",
+	&"hydration": "res://SimpleHUD/icons/hydration_icon.png",
+	&"mental": "res://SimpleHUD/icons/mental_icon.png",
+	&"body_temp": "res://SimpleHUD/icons/temperature_icon.png",
+	&"stamina": "res://SimpleHUD/icons/stamina_icon.png",
+	&"fatigue": "res://SimpleHUD/icons/fatigue_icon.png",
 }
 
 var stat_id: StringName
@@ -40,7 +40,7 @@ func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_rad
 
 		var icon_path: String = str(STAT_ICON_PATHS.get(stat_id, ""))
 		if icon_path != "":
-			var tex: Texture2D = load(icon_path)
+			var tex: Texture2D = _load_icon_texture(icon_path)
 			if tex != null && r.has_method("set_icon"):
 				r.call("set_icon", tex)
 		add_child(r)
@@ -79,3 +79,27 @@ func _apply_text_color(percent: float) -> void:
 		c = _cfg.call("get_stat_text_color", percent)
 	if _label:
 		_label.add_theme_color_override("font_color", c)
+
+
+func _load_icon_texture(path: String) -> Texture2D:
+	var bytes: PackedByteArray = FileAccess.get_file_as_bytes(path)
+	if bytes.is_empty():
+		return null
+
+	var img := Image.new()
+	var lower := path.to_lower()
+	var err := ERR_FILE_UNRECOGNIZED
+	if lower.ends_with(".png"):
+		err = img.load_png_from_buffer(bytes)
+	elif lower.ends_with(".jpg") || lower.ends_with(".jpeg"):
+		err = img.load_jpg_from_buffer(bytes)
+	elif lower.ends_with(".webp"):
+		err = img.load_webp_from_buffer(bytes)
+	elif lower.ends_with(".svg"):
+		err = img.load_svg_from_buffer(bytes, 1.0)
+	else:
+		return null
+
+	if err != OK:
+		return null
+	return ImageTexture.create_from_image(img)
