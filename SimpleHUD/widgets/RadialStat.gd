@@ -7,6 +7,7 @@ extends Control
 
 var _ratio: float = 1.0
 var _icon: Texture2D
+var _progress_color: Color = Color.WHITE
 
 func set_ratio(r: float) -> void:
 	_ratio = clampf(r, 0.0, 1.0)
@@ -14,6 +15,10 @@ func set_ratio(r: float) -> void:
 
 func set_icon(texture: Texture2D) -> void:
 	_icon = texture
+	queue_redraw()
+
+func set_progress_color(color: Color) -> void:
+	_progress_color = color
 	queue_redraw()
 
 func _draw() -> void:
@@ -30,7 +35,7 @@ func _draw() -> void:
 	# Keep a full donut track visible at any value.
 	draw_arc(center, rad, start, start + TAU, ARC_POINTS, Color(1.0, 1.0, 1.0, 0.24), w, true)
 	if _ratio > 0.0:
-		draw_arc(center, rad, start, seg_end, ARC_POINTS, Color.WHITE, w, true)
+		draw_arc(center, rad, start, seg_end, ARC_POINTS, _progress_color, w, true)
 
 	if _icon != null:
 		var icon_side: float = clampf(icon_size_px, 8.0, minf(size.x, size.y))

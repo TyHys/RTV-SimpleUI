@@ -69,6 +69,11 @@ func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_
 	if use_radial && _radial:
 		if _radial.has_method("set_ratio"):
 			_radial.call("set_ratio", percent / 100.0)
+		var rc := Color.WHITE
+		if _cfg != null && _cfg.has_method("get_stat_text_color"):
+			rc = _cfg.call("get_stat_text_color", percent)
+		if _radial.has_method("set_progress_color"):
+			_radial.call("set_progress_color", rc)
 	elif _label:
 		_label.text = "%s %d" % [title, int(round(percent))]
 	_apply_text_color(percent)

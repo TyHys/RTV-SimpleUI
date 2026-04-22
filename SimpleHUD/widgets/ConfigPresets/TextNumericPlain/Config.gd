@@ -11,28 +11,28 @@ const EMBEDDED_DEFAULTS_INI := """[general]
 enabled=true
 min_stat_alpha_floor=0
 log=true
-numeric_only=false
+numeric_only=true
 [health]
 visible_threshold=101.0
-radial=true
+radial=false
 [energy]
 visible_threshold=79.0
-radial=true
+radial=false
 [hydration]
 visible_threshold=79.0
-radial=true
+radial=false
 [mental]
 visible_threshold=79.0
-radial=true
+radial=false
 [body_temp]
 visible_threshold=79.0
-radial=true
+radial=false
 [stamina]
 visible_threshold=50.0
-radial=true
+radial=false
 [fatigue]
 visible_threshold=50.0
-radial=true
+radial=false
 [status_icons]
 mode=\"inflicted_only\"
 corner=\"bottom_right\"
@@ -57,18 +57,18 @@ margin_bottom=5
 strip_width_px=960
 row_height_px=36
 [stat_text_colors]
-mode=\"gradient\"
+mode=\"white_only\"
 high_start_pct=75
 mid_pct=50
 high_r=255
 high_g=255
 high_b=255
-mid_r=190
-mid_g=190
-mid_b=15
-low_r=200
-low_g=25
-low_b=15
+mid_r=255
+mid_g=255
+mid_b=255
+low_r=255
+low_g=255
+low_b=255
 """
 
 const STAT_HEALTH := &"health"
@@ -116,18 +116,18 @@ var vitals_margin_left: float = 8.0
 var vitals_margin_bottom: float = 5.0
 var vitals_strip_width_px: float = 960.0
 var vitals_row_height_px: float = 36.0
-var stat_text_color_mode: String = "gradient" # gradient | white_only
+var stat_text_color_mode: String = "white_only" # gradient | white_only
 var stat_text_high_start_pct: float = 75.0
 var stat_text_mid_pct: float = 50.0
 var stat_text_high_r: int = 255
 var stat_text_high_g: int = 255
 var stat_text_high_b: int = 255
-var stat_text_mid_r: int = 190
-var stat_text_mid_g: int = 190
-var stat_text_mid_b: int = 15
-var stat_text_low_r: int = 200
-var stat_text_low_g: int = 25
-var stat_text_low_b: int = 15
+var stat_text_mid_r: int = 255
+var stat_text_mid_g: int = 255
+var stat_text_mid_b: int = 255
+var stat_text_low_r: int = 255
+var stat_text_low_g: int = 255
+var stat_text_low_b: int = 255
 
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
@@ -135,7 +135,7 @@ var min_stat_alpha_floor: float = 0.0
 var log_enabled: bool = true
 
 ## When true, vitals always use text labels (ignores per-stat radial in INI).
-var numeric_only: bool = false
+var numeric_only: bool = true
 
 var _loaded_user_path: String = ""
 
@@ -277,7 +277,7 @@ func apply_defaults() -> void:
 				visible_threshold[id] = 50.0
 			_:
 				visible_threshold[id] = 79.0
-		radial[id] = true
+		radial[id] = false
 	status_mode = "inflicted_only"
 	status_corner = "bottom_right"
 	status_spacing_px = 2.0
@@ -296,23 +296,23 @@ func apply_defaults() -> void:
 	fps_map_offset_y = 4.0
 	min_stat_alpha_floor = 0.0
 	log_enabled = true
-	numeric_only = false
+	numeric_only = true
 	vitals_margin_left = 8.0
 	vitals_margin_bottom = 5.0
 	vitals_strip_width_px = 960.0
 	vitals_row_height_px = 36.0
-	stat_text_color_mode = "gradient"
+	stat_text_color_mode = "white_only"
 	stat_text_high_start_pct = 75.0
 	stat_text_mid_pct = 50.0
 	stat_text_high_r = 255
 	stat_text_high_g = 255
 	stat_text_high_b = 255
-	stat_text_mid_r = 190
-	stat_text_mid_g = 190
-	stat_text_mid_b = 15
-	stat_text_low_r = 200
-	stat_text_low_g = 25
-	stat_text_low_b = 15
+	stat_text_mid_r = 255
+	stat_text_mid_g = 255
+	stat_text_mid_b = 255
+	stat_text_low_r = 255
+	stat_text_low_g = 255
+	stat_text_low_b = 255
 
 func get_status_icon_color() -> Color:
 	return Color8(status_color_r, status_color_g, status_color_b, 255)

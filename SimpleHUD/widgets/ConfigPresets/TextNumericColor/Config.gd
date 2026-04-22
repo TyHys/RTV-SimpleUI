@@ -11,28 +11,28 @@ const EMBEDDED_DEFAULTS_INI := """[general]
 enabled=true
 min_stat_alpha_floor=0
 log=true
-numeric_only=false
+numeric_only=true
 [health]
 visible_threshold=101.0
-radial=true
+radial=false
 [energy]
 visible_threshold=79.0
-radial=true
+radial=false
 [hydration]
 visible_threshold=79.0
-radial=true
+radial=false
 [mental]
 visible_threshold=79.0
-radial=true
+radial=false
 [body_temp]
 visible_threshold=79.0
-radial=true
+radial=false
 [stamina]
 visible_threshold=50.0
-radial=true
+radial=false
 [fatigue]
 visible_threshold=50.0
-radial=true
+radial=false
 [status_icons]
 mode=\"inflicted_only\"
 corner=\"bottom_right\"
@@ -135,7 +135,7 @@ var min_stat_alpha_floor: float = 0.0
 var log_enabled: bool = true
 
 ## When true, vitals always use text labels (ignores per-stat radial in INI).
-var numeric_only: bool = false
+var numeric_only: bool = true
 
 var _loaded_user_path: String = ""
 
@@ -277,7 +277,7 @@ func apply_defaults() -> void:
 				visible_threshold[id] = 50.0
 			_:
 				visible_threshold[id] = 79.0
-		radial[id] = true
+		radial[id] = false
 	status_mode = "inflicted_only"
 	status_corner = "bottom_right"
 	status_spacing_px = 2.0
@@ -296,7 +296,7 @@ func apply_defaults() -> void:
 	fps_map_offset_y = 4.0
 	min_stat_alpha_floor = 0.0
 	log_enabled = true
-	numeric_only = false
+	numeric_only = true
 	vitals_margin_left = 8.0
 	vitals_margin_bottom = 5.0
 	vitals_strip_width_px = 960.0
