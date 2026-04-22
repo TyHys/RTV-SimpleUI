@@ -1,0 +1,152 @@
+extends Control
+
+const SimpleHUDConfigScript := preload("res://SimpleHUD/Config.gd")
+const STAT_WIDGET_SCRIPT := preload("res://SimpleHUD/widgets/StatWidget.gd")
+const STATUS_TRAY_SCRIPT := preload("res://SimpleHUD/widgets/StatusTray.gd")
+
+var _game_data: Resource
+var _cfg: RefCounted
+
+var _stats_root: Control
+var _vitals_box: HBoxContainer
+var _widgets: Dictionary = {}
+
+var _tray: Control
+
+## Mirrors escape-menu → Settings HUD toggles (Preferences.vitals / Preferences.medical).
+var _prefs_vitals: bool = true
+var _prefs_medical: bool = true
+
+func setup(game_data: Resource, cfg: RefCounted) -> void:
+	_game_data = game_data
+	_cfg = cfg
+
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	_stats_root = Control.new()
+	_stats_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stats_root.z_index = 32
+	add_child(_stats_root)
+
+	_vitals_box = HBoxContainer.new()
+	_vitals_box.add_theme_constant_override("separation", 12)
+	_vitals_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_stats_root.add_child(_vitals_box)
+
+	var defs: Array = [
+		[SimpleHUDConfigScript.STAT_HEALTH, "HP"],
+		[SimpleHUDConfigScript.STAT_ENERGY, "Food"],
+		[SimpleHUDConfigScript.STAT_HYDRATION, "HY"],
+		[SimpleHUDConfigScript.STAT_MENTAL, "MN"],
+		[SimpleHUDConfigScript.STAT_BODY_TEMP, "TP"],
+		[SimpleHUDConfigScript.STAT_STAMINA, "ST"],
+		[SimpleHUDConfigScript.STAT_FATIGUE, "RF"],
+	]
+
+	for d in defs:
+		var sid: StringName = d[0]
+		var ttl: String = d[1]
+		var sw: Control = STAT_WIDGET_SCRIPT.new() as Control
+		sw.setup(sid, ttl, game_data, cfg.get_radial(sid))
+		_widgets[sid] = sw
+		_vitals_box.add_child(sw)
+
+	_tray = STATUS_TRAY_SCRIPT.new() as Control
+	_tray.setup(game_data, cfg)
+	add_child(_tray)
+	if _tray.has_method("refresh"):
+		_tray.call("refresh")
+
+
+func configure_hud_prefs(vitals_on: bool, medical_on: bool) -> void:
+	_prefs_vitals = vitals_on
+	_prefs_medical = medical_on
+
+
+func set_live_game_data(r: Resource) -> void:
+	if r != null && is_instance_valid(r):
+		_game_data = r
+		if _tray && _tray.has_method("set_game_data"):
+			_tray.call("set_game_data", r)
+
+
+func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
+	if !is_instance_valid(_stats_root):
+		return
+
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	offset_left = 0.0
+	offset_top = 0.0
+	offset_right = 0.0
+	offset_bottom = 0.0
+	if vp_size.x > 1.0 && vp_size.y > 1.0:
+		size = vp_size
+		position = Vector2.ZERO
+
+	_stats_root.visible = stats_visible && _cfg.enabled && _prefs_vitals
+
+	var margin := 48.0
+
+	_stats_root.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_stats_root.offset_left = -400
+	_stats_root.offset_right = 400
+	_stats_root.offset_top = -120
+	_stats_root.offset_bottom = -16
+
+	if _tray:
+		_tray.visible = _prefs_medical
+		_tray.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		_tray.offset_left = -320.0 - margin
+		_tray.offset_right = -margin
+		_tray.offset_top = -360.0 - margin
+		_tray.offset_bottom = -margin
+
+
+func tick() -> void:
+	if !_cfg.enabled || !is_instance_valid(_game_data):
+		return
+	if !_prefs_vitals:
+		return
+
+	for sid in SimpleHUDConfigScript.STAT_IDS:
+		var p: float = _normalized_percent(sid, _percent_for(sid))
+		var th: float = float(_cfg.get_threshold(sid))
+		var show_stat: bool = p <= th
+		var use_radial: bool = bool(_cfg.get_radial(sid))
+		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
+		var alpha: float = computed
+		if show_stat && sid != SimpleHUDConfigScript.STAT_HEALTH:
+			var fl: float = float(_cfg.min_stat_alpha_floor)
+			alpha = maxf(computed, fl)
+
+		var w: Control = _widgets.get(sid)
+		if w && w.has_method("update_display"):
+			w.call("update_display", p, show_stat, use_radial, alpha)
+
+
+func _normalized_percent(sid: StringName, raw: float) -> float:
+	var x: float = float(raw)
+	if sid == SimpleHUDConfigScript.STAT_BODY_TEMP:
+		return x
+	if x >= 0.0 && x <= 1.0001:
+		x *= 100.0
+	return clampf(x, 0.0, 100.0)
+
+
+func _percent_for(sid: StringName) -> float:
+	match sid:
+		SimpleHUDConfigScript.STAT_HEALTH:
+			return _game_data.health
+		SimpleHUDConfigScript.STAT_ENERGY:
+			return _game_data.energy
+		SimpleHUDConfigScript.STAT_HYDRATION:
+			return _game_data.hydration
+		SimpleHUDConfigScript.STAT_MENTAL:
+			return _game_data.mental
+		SimpleHUDConfigScript.STAT_BODY_TEMP:
+			return _game_data.temperature
+		SimpleHUDConfigScript.STAT_STAMINA:
+			return _game_data.bodyStamina
+		SimpleHUDConfigScript.STAT_FATIGUE:
+			return _game_data.armStamina
+	return 0.0
