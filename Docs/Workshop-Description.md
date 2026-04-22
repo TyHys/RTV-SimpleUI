@@ -23,6 +23,8 @@ SimpleHUD focuses on readable, context-driven information:
 - **TextNumericPlain**  
   [View screenshot](https://i.imgur.com/KS9XR07.jpeg)
 
+> **Note:** These are separate downloads for convenience, but functionally the main difference between presets is the values defined in `SimpleHUD/Config.gd`.
+
 ## How To Choose
 
 Please review the **current screenshots** on this workshop page and pick the preset that best fits your readability preference and visual style.
