@@ -21,6 +21,11 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 
 	_box.add_theme_constant_override("separation", int(_cfg.status_spacing_px))
 	add_child(_box)
+	_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_box.offset_left = 0.0
+	_box.offset_top = 0.0
+	_box.offset_right = 0.0
+	_box.offset_bottom = 0.0
 
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -101,8 +106,12 @@ func refresh() -> void:
 
 		var tr := TextureRect.new()
 		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tr.custom_minimum_size = Vector2(28, 28) * _cfg.status_icon_scale
+		tr.custom_minimum_size = Vector2.ONE * float(_cfg.status_icon_size_px)
+		tr.size = tr.custom_minimum_size
+		tr.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		tr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var active_color: Color = _cfg.get_status_icon_color()
 		match mode:
 			"always":
@@ -111,6 +120,12 @@ func refresh() -> void:
 				tr.modulate = active_color
 
 		_box.add_child(tr)
+
+	var min_size: Vector2 = _box.get_combined_minimum_size()
+	if min_size.x <= 0.0 || min_size.y <= 0.0:
+		min_size = Vector2.ONE * float(_cfg.status_icon_size_px)
+	custom_minimum_size = min_size
+	size = min_size
 
 
 func _physics_process(_delta: float) -> void:

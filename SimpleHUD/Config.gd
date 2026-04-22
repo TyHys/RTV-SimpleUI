@@ -37,7 +37,8 @@ radial=false
 mode=\"inflicted_only\"
 corner=\"bottom_right\"
 spacing_px=2
-icon_scale=0.6
+icon_scale=0.12
+icon_size_px=32
 stack_direction=\"vertical_up\"
 margin_right=5
 margin_bottom=5
@@ -84,7 +85,8 @@ var visible_threshold: Dictionary = {} # stat_id -> float
 var status_mode: String = "inflicted_only"
 var status_corner: String = "bottom_right"
 var status_spacing_px: float = 2.0
-var status_icon_scale: float = 0.6
+var status_icon_scale: float = 0.12
+var status_icon_size_px: float = 32.0
 var status_stack_direction: String = "vertical_up"
 var status_margin_right: float = 5.0
 var status_margin_bottom: float = 5.0
@@ -180,7 +182,9 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		if cf.has_section_key("status_icons", "spacing_px"):
 			status_spacing_px = clampf(float(cf.get_value("status_icons", "spacing_px")), 0.0, 64.0)
 		if cf.has_section_key("status_icons", "icon_scale"):
-			status_icon_scale = clampf(float(cf.get_value("status_icons", "icon_scale")), 0.25, 4.0)
+			status_icon_scale = clampf(float(cf.get_value("status_icons", "icon_scale")), 0.05, 4.0)
+		if cf.has_section_key("status_icons", "icon_size_px"):
+			status_icon_size_px = clampf(float(cf.get_value("status_icons", "icon_size_px")), 8.0, 128.0)
 		if cf.has_section_key("status_icons", "stack_direction"):
 			status_stack_direction = str(cf.get_value("status_icons", "stack_direction"))
 		if cf.has_section_key("status_icons", "margin_right"):
@@ -233,7 +237,8 @@ func apply_defaults() -> void:
 	status_mode = "inflicted_only"
 	status_corner = "bottom_right"
 	status_spacing_px = 2.0
-	status_icon_scale = 0.6
+	status_icon_scale = 0.12
+	status_icon_size_px = 32.0
 	status_stack_direction = "vertical_up"
 	status_margin_right = 5.0
 	status_margin_bottom = 5.0
@@ -262,7 +267,8 @@ func _apply_preset(name: String) -> void:
 			vitals_strip_width_px = 960.0
 			vitals_row_height_px = 36.0
 			status_spacing_px = 2.0
-			status_icon_scale = 0.6
+			status_icon_scale = 0.12
+			status_icon_size_px = 32.0
 			status_margin_right = 5.0
 			status_margin_bottom = 5.0
 			status_color_r = 120
@@ -277,7 +283,8 @@ func _apply_preset(name: String) -> void:
 			vitals_strip_width_px = 960.0
 			vitals_row_height_px = 36.0
 			status_spacing_px = 2.0
-			status_icon_scale = 0.6
+			status_icon_scale = 0.12
+			status_icon_size_px = 32.0
 			status_margin_right = 5.0
 			status_margin_bottom = 5.0
 			status_color_r = 120

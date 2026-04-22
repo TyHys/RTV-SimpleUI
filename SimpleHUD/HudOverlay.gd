@@ -101,14 +101,18 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 
 	if _tray:
 		_tray.visible = _prefs_medical
-		_tray.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		_tray.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		if _tray.has_method("refresh"):
+			_tray.call("refresh")
 		var tray_size: Vector2 = _tray.get_combined_minimum_size()
+		tray_size.x = maxf(tray_size.x, 28.0)
+		tray_size.y = maxf(tray_size.y, 28.0)
 		var tray_right: float = float(_cfg.status_margin_right)
 		var tray_bottom: float = float(_cfg.status_margin_bottom)
-		_tray.offset_right = -tray_right
-		_tray.offset_bottom = -tray_bottom
-		_tray.offset_left = -tray_right - tray_size.x
-		_tray.offset_top = -tray_bottom - tray_size.y
+		var tray_x: float = maxf(0.0, vp_size.x - tray_right - tray_size.x)
+		var tray_y: float = maxf(0.0, vp_size.y - tray_bottom - tray_size.y)
+		_tray.position = Vector2(tray_x, tray_y)
+		_tray.size = tray_size
 
 
 func tick() -> void:
