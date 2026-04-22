@@ -43,6 +43,11 @@ scale=0.81
 anchor=\"top_left\"
 offset_x=4
 offset_y=4
+[vitals_layout]
+margin_left=8
+margin_bottom=8
+strip_width_px=960
+row_height_px=52
 """
 
 const STAT_HEALTH := &"health"
@@ -79,6 +84,11 @@ var fps_map_scale: float = 0.81
 var fps_map_anchor: String = "top_left"
 var fps_map_offset_x: float = 4.0
 var fps_map_offset_y: float = 4.0
+
+var vitals_margin_left: float = 8.0
+var vitals_margin_bottom: float = 8.0
+var vitals_strip_width_px: float = 960.0
+var vitals_row_height_px: float = 52.0
 
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
@@ -167,6 +177,16 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		if cf.has_section_key("fps_map", "offset_y"):
 			fps_map_offset_y = clampf(float(cf.get_value("fps_map", "offset_y")), 0.0, 256.0)
 
+	if cf.has_section("vitals_layout"):
+		if cf.has_section_key("vitals_layout", "margin_left"):
+			vitals_margin_left = clampf(float(cf.get_value("vitals_layout", "margin_left")), 0.0, 256.0)
+		if cf.has_section_key("vitals_layout", "margin_bottom"):
+			vitals_margin_bottom = clampf(float(cf.get_value("vitals_layout", "margin_bottom")), 0.0, 256.0)
+		if cf.has_section_key("vitals_layout", "strip_width_px"):
+			vitals_strip_width_px = clampf(float(cf.get_value("vitals_layout", "strip_width_px")), 120.0, 4096.0)
+		if cf.has_section_key("vitals_layout", "row_height_px"):
+			vitals_row_height_px = clampf(float(cf.get_value("vitals_layout", "row_height_px")), 16.0, 256.0)
+
 func apply_defaults() -> void:
 	enabled = true
 	radial.clear()
@@ -193,6 +213,10 @@ func apply_defaults() -> void:
 	min_stat_alpha_floor = 0.0
 	log_enabled = true
 	numeric_only = true
+	vitals_margin_left = 8.0
+	vitals_margin_bottom = 8.0
+	vitals_strip_width_px = 960.0
+	vitals_row_height_px = 52.0
 
 func get_loaded_user_ini_path() -> String:
 	return _loaded_user_path

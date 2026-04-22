@@ -30,7 +30,7 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 
 	_vitals_box = HBoxContainer.new()
 	_vitals_box.add_theme_constant_override("separation", 12)
-	_vitals_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_vitals_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_stats_root.add_child(_vitals_box)
 
 	var defs: Array = [
@@ -85,13 +85,21 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 
 	_stats_root.visible = stats_visible && _cfg.enabled && _prefs_vitals
 
-	var margin := 48.0
+	var corner_m := float(_cfg.vitals_margin_left)
+	var corner_mb := float(_cfg.vitals_margin_bottom)
+	var strip_w := float(_cfg.vitals_strip_width_px)
+	var row_h := float(_cfg.vitals_row_height_px)
 
-	_stats_root.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_stats_root.offset_left = -400
-	_stats_root.offset_right = 400
-	_stats_root.offset_top = -120
-	_stats_root.offset_bottom = -16
+	_stats_root.anchor_left = 0.0
+	_stats_root.anchor_top = 1.0
+	_stats_root.anchor_right = 0.0
+	_stats_root.anchor_bottom = 1.0
+	_stats_root.offset_left = corner_m
+	_stats_root.offset_top = -(corner_mb + row_h)
+	_stats_root.offset_right = corner_m + strip_w
+	_stats_root.offset_bottom = -corner_mb
+
+	var margin := 48.0
 
 	if _tray:
 		_tray.visible = _prefs_medical
