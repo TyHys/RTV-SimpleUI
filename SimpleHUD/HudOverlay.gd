@@ -130,7 +130,7 @@ func tick() -> void:
 		var use_radial: bool = bool(_cfg.get_radial(sid))
 		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
 		var alpha: float = computed
-		if show_stat && sid != SimpleHUDConfigScript.STAT_HEALTH:
+		if show_stat:
 			var fl: float = float(_cfg.min_stat_alpha_floor)
 			alpha = maxf(computed, fl)
 

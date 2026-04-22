@@ -40,5 +40,5 @@ SimpleHUD is built to be a configurable foundation:
 - HUD placement and spacing controls
 - status icon and info layout controls
 
-If you like to tune your HUD over time, this framework is meant to grow with your setup rather than lock you into one static style. If you have a vision for a HUD you feel is not possible with the current framework, please feel free to reach out to me. I would be willing this featureset given the right vision.
+If you like to tune your HUD over time, this framework is meant to grow with your setup rather than lock you into one static style. If you have a vision for a HUD you feel is not possible with the current framework, please feel free to reach out to me. I would be willing to expand this featureset given the right vision.
 
