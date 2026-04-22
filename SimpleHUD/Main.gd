@@ -186,6 +186,10 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 			val_text = val_text.strip_edges()
 		fps_value.text = val_text
 		fps_value.add_theme_color_override("font_color", Color.WHITE)
+		fps_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		# Vanilla scene offsets Frames by +36 to clear "FPS:"; collapse that gap.
+		fps_value.offset_left = 0.0
+		fps_value.offset_right = 40.0
 
 
 func _clear_binding() -> void:
