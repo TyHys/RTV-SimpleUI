@@ -2,13 +2,13 @@ extends Control
 
 const RADIAL_SCRIPT := preload("res://SimpleHUD/widgets/RadialStat.gd")
 const STAT_ICON_PATHS := {
-	&"health": "res://SimpleHUD/icons/health.svg",
-	&"energy": "res://SimpleHUD/icons/energy.svg",
-	&"hydration": "res://SimpleHUD/icons/hydration.svg",
-	&"mental": "res://SimpleHUD/icons/mental.svg",
-	&"body_temp": "res://SimpleHUD/icons/bodytemp.svg",
-	&"stamina": "res://SimpleHUD/icons/stamina.svg",
-	&"fatigue": "res://SimpleHUD/icons/fatigue.svg",
+	&"health": "res://SimpleHUD/icons/health.png",
+	&"energy": "res://SimpleHUD/icons/energy.png",
+	&"hydration": "res://SimpleHUD/icons/hydration.png",
+	&"mental": "res://SimpleHUD/icons/mental.png",
+	&"body_temp": "res://SimpleHUD/icons/bodytemp.png",
+	&"stamina": "res://SimpleHUD/icons/stamina.png",
+	&"fatigue": "res://SimpleHUD/icons/fatigue.png",
 }
 
 var stat_id: StringName
@@ -62,10 +62,9 @@ func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_
 		setup(stat_id, title, null, use_radial, _cfg)
 
 	modulate.a = alpha_mult
-	visible = true if use_radial else visible_rule
+	visible = visible_rule
 	if !visible_rule:
-		if !use_radial:
-			return
+		return
 
 	if use_radial && _radial:
 		if _radial.has_method("set_ratio"):

@@ -87,6 +87,8 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 
 	var corner_m := float(_cfg.vitals_margin_left)
 	var corner_mb := float(_cfg.vitals_margin_bottom)
+	if _uses_radial_mode():
+		corner_mb = maxf(corner_mb, 32.0)
 	var strip_w := float(_cfg.vitals_strip_width_px)
 	var row_h := float(_cfg.vitals_row_height_px)
 
@@ -126,17 +128,24 @@ func tick() -> void:
 		var th: float = float(_cfg.get_threshold(sid))
 		var show_stat: bool = p <= th
 		var use_radial: bool = bool(_cfg.get_radial(sid))
-		var alpha: float = 1.0
-		if !use_radial:
-			var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
-			alpha = computed
-			if show_stat && sid != SimpleHUDConfigScript.STAT_HEALTH:
-				var fl: float = float(_cfg.min_stat_alpha_floor)
-				alpha = maxf(computed, fl)
+		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
+		var alpha: float = computed
+		if show_stat && sid != SimpleHUDConfigScript.STAT_HEALTH:
+			var fl: float = float(_cfg.min_stat_alpha_floor)
+			alpha = maxf(computed, fl)
 
 		var w: Control = _widgets.get(sid)
 		if w && w.has_method("update_display"):
 			w.call("update_display", p, show_stat, use_radial, alpha)
+
+
+func _uses_radial_mode() -> bool:
+	if _cfg == null:
+		return false
+	for sid in SimpleHUDConfigScript.STAT_IDS:
+		if bool(_cfg.get_radial(sid)):
+			return true
+	return false
 
 
 func _normalized_percent(sid: StringName, raw: float) -> float:
