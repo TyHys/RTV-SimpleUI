@@ -9,15 +9,19 @@ This README is for maintainers/contributors, not end users.
 - `mod.txt`  
   Mod metadata and autoload registration (`SimpleHUDMain`).
 - `SimpleHUD/Main.gd`  
-  Runtime entrypoint; binds to vanilla HUD, reads preferences, drives overlay updates.
+  Runtime entrypoint; binds to vanilla HUD, reads preferences, drives overlay updates; replaces `Scripts/Interface.gd` with `SimpleHUD/Interface.gd` (inventory **HUD** tab).
+- `SimpleHUD/Interface.gd`  
+  Extends vanilla `Interface.gd`; adds the **HUD** tools-column panel (status ailment tray settings). **Mod conflict:** another mod that also replaces `Interface.gd` (e.g. Debug Mode) will overwrite this unless you merge scripts or adjust load order.
 - `SimpleHUD/HudOverlay.gd`  
   Builds and updates vitals/status UI, layout/positioning, alpha behavior.
+- `SimpleHUD/SimpleHUDConfigCore.gd`  
+  Configuration implementation (INI parsing, defaults, helpers, JSON merge hooks).
 - `SimpleHUD/Config.gd`  
-  Active runtime configuration class (full parser + defaults + helpers).
+  Stable entrypoint loaded by `Main.gd`; repo default subclasses the core. VMZ builds replace only this file with a preset stub.
 - `SimpleHUD/widgets/*`  
   UI widgets (`StatWidget`, `RadialStat`, `StatusTray`).
 - `presets/<PresetName>/Config.gd`  
-  Full preset config variants (standalone folder at repo root; **not** shipped inside VMZs—each build injects one as `SimpleHUD/Config.gd`).
+  Thin preset classes (subclass `SimpleHUDConfigCore.gd`). Build injects one as `SimpleHUD/Config.gd` per VMZ.
 - `SimpleHUD.default.ini`  
   Packaged default INI (included in VMZ build).
 - `build_simplehud_vmz.sh`  
@@ -25,21 +29,17 @@ This README is for maintainers/contributors, not end users.
 
 ## Preset Model
 
-Presets are full `Config.gd` files:
+Presets override `apply_defaults()` and/or `_embedded_defaults_ini()` (fallback INI string) via small scripts that extend `SimpleHUDConfigCore.gd`. Named variants include `TextNumericPlain`, `TextNumericColor`, `RadialPlain`, `RadialColor`, and `*NoHide` builds.
 
-- `TextNumericPlain`
-- `TextNumericColor`
-- `RadialPlain`
-- `RadialColor`
-
-Each preset `Config.gd` is comprehensive (not partial). You can replace `SimpleHUD/Config.gd` with a preset file and get a full mode switch.
+Players tune HUD layout and colors with optional `user://simplehud_preferences.json` (see `simplehud_preferences.example.json` for a short template and `simplehud_preferences.full.example.json` for every key).
 
 ## Critical Config Behavior
 
-`Config.gd` supports two load layers after `apply_defaults()`:
+`SimpleHUDConfigCore.gd` supports load layers after `apply_defaults()`:
 
-1. `res://SimpleHUD.default.ini`
-2. `user://simplehud.ini`
+1. `res://SimpleHUD.default.ini` (optional)
+2. `user://simplehud.ini` (optional)
+3. `user://simplehud_preferences.json` (optional; merged in `Main.gd` via `UserPreferences.gd`)
 
 For strict preset behavior, this repo currently uses:
 

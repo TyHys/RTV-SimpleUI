@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "general": {
+    "enabled": true,
+    "min_stat_alpha_floor": 0,
+    "numeric_only": false,
+    "stamina_fatigue_near_zero_cutoff": 1
+  },
+  "vitals_layout": {
+    "spacing_px": 12,
+    "strip_alignment": "leading",
+    "margin_left": 8,
+    "margin_right": 8,
+    "margin_top": 8,
+    "margin_bottom": 5,
+    "strip_width_px": 960,
+    "row_height_px": 36
+  },
+  "vitals": {
+    "health": {
+      "mode": "numeric",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 101,
+      "spacing_px": 12,
+      "gradient": {
+        "mode": "gradient",
+        "high_threshold_pct": 75,
+        "mid_threshold_pct": 50,
+        "high_rgb": [255, 255, 255],
+        "mid_rgb": [190, 190, 15],
+        "low_rgb": [200, 25, 15]
+      }
+    },
+    "energy": {
+      "mode": "radial",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 79
+    },
+    "hydration": {
+      "mode": "radial",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 79
+    },
+    "mental": {
+      "mode": "radial",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 79
+    },
+    "body_temp": {
+      "mode": "radial",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 79
+    },
+    "stamina": {
+      "mode": "radial",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 50
+    },
+    "fatigue": {
+      "mode": "radial",
+      "anchor": "bottom",
+      "padding_px": 5,
+      "scale_pct": 100,
+      "visible_threshold_pct": 50
+    }
+  },
+  "status": {
+    "mode": "inflicted_only",
+    "auto_hide_when_none": false,
+    "anchor": "right",
+    "spacing_px": 2,
+    "padding_px": 5,
+    "scale_pct": 100,
+    "stack_direction": "vertical_up",
+    "strip_alignment": "trailing",
+    "rgb": [120, 0, 0],
+    "inactive_rgb": [120, 0, 0]
+  },
+  "fps_map": {
+    "alpha": 0.5,
+    "scale": 0.81,
+    "anchor": "top_left",
+    "offset_x": 4,
+    "offset_y": 4
+  }
+}

@@ -1,7 +1,7 @@
 extends Control
 
 const RADIAL_SCRIPT := preload("res://SimpleHUD/widgets/RadialStat.gd")
-const SimpleHudConfigScript := preload("res://SimpleHUD/Config.gd")
+const SimpleHudConfigScript := preload("res://SimpleHUD/SimpleHUDConfigCore.gd")
 const STAT_ICON_PATHS := {
 	&"health": "res://SimpleHUD/icons/hp_icon.png",
 	&"energy": "res://SimpleHUD/icons/hunger_icon.png",
@@ -19,6 +19,9 @@ var _label: Label
 var _radial: RADIAL_SCRIPT
 var _built_radial: bool = false
 var _cfg: RefCounted
+
+const _BASE_FONT := 13
+const _BASE_OUTLINE := 6
 
 func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_radial: bool, cfg: RefCounted = null) -> void:
 	stat_id = p_stat_id
@@ -57,6 +60,7 @@ func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_rad
 		_label = l
 
 	_built_radial = use_radial
+	_sync_layout_scale()
 
 func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_mult: float) -> void:
 	if use_radial != _built_radial:
@@ -72,17 +76,41 @@ func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_
 		var rc := Color.WHITE
 		var cfg_radial := _cfg as SimpleHudConfigScript
 		if cfg_radial != null:
-			rc = cfg_radial.get_stat_text_color(percent)
+			rc = cfg_radial.get_stat_text_color_for(stat_id, percent)
 		_radial.set_progress_color(rc)
 	elif _label:
 		_label.text = "%s %d" % [title, int(round(percent))]
 	_apply_text_color(percent)
+	_sync_layout_scale()
+
+
+func _sync_layout_scale() -> void:
+	var sc := 1.0
+	var cfg_txt := _cfg as SimpleHudConfigScript
+	if cfg_txt != null:
+		sc = clampf(float(cfg_txt.get_vitals_scale_pct(stat_id)) / 100.0, 0.25, 4.0)
+
+	var use_radial := _built_radial && _radial != null
+	if use_radial:
+		custom_minimum_size = Vector2(56.0, 56.0) * sc
+		if _radial != null:
+			_radial.custom_minimum_size = Vector2(52.0, 52.0) * sc
+			_radial.ring_width = clampf(5.0 * sc, 2.0, 16.0)
+			_radial.icon_size_px = clampf(32.0 * sc, 8.0, 96.0)
+	else:
+		custom_minimum_size = Vector2(72.0, 36.0) * sc
+	if _label:
+		var fs := maxi(6, int(round(float(_BASE_FONT) * sc)))
+		var ol := maxi(0, int(round(float(_BASE_OUTLINE) * sc)))
+		_label.add_theme_font_size_override("font_size", fs)
+		_label.add_theme_constant_override("outline_size", ol)
+
 
 func _apply_text_color(percent: float) -> void:
 	var c := Color.WHITE
 	var cfg_txt := _cfg as SimpleHudConfigScript
 	if cfg_txt != null:
-		c = cfg_txt.get_stat_text_color(percent)
+		c = cfg_txt.get_stat_text_color_for(stat_id, percent)
 	if _label:
 		_label.add_theme_color_override("font_color", c)
 

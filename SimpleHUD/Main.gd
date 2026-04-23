@@ -1,8 +1,19 @@
 extends Node
 
+## Native `Node` lifecycle + `super()` is a parse error in this game's GDScript build; omit `super()` here.
+
 ## Same pattern as BikeMod: path from scene tree root, not "/root/Map/..." (that breaks when resolved from root).
 const SimpleHUDConfigScript := preload("res://SimpleHUD/Config.gd")
 const SimpleHudOverlay := preload("res://SimpleHUD/HudOverlay.gd")
+const UserPreferencesScript := preload("res://SimpleHUD/UserPreferences.gd")
+const SimpleHUDSettingsPanelScript := preload("res://SimpleHUD/SimpleHUDSettingsPanel.gd")
+const SimpleHUDPresetsReg := preload("res://SimpleHUD/PresetsRegistry.gd")
+
+## Set false to silence `[SimpleHUD]` prints (preferences still save).
+const SIMPLEHUD_DIAG_LOG := true
+
+## Verbose diagnostics for main-menu SimpleHUD overlay (sizes, visibility, deferred layout). Set false to reduce console noise.
+const SIMPLEHUD_MENU_PANEL_DIAG := true
 
 var game_data: Resource = preload("res://Resources/GameData.tres")
 
@@ -14,13 +25,527 @@ var _overlay: SimpleHudOverlay
 ## Runtime `GameData` the game mutates (often not the same object identity as preload if the scene holds a live ref).
 var _live_game_data: Resource = null
 
+var _logged_overlay_missing_refresh: bool = false
+
+## Main menu (`Menu.tscn`) SimpleHUD overlay; used to close on Escape and from Return.
+var _simplehud_main_menu_scene: Control = null
+var _simplehud_main_menu_panel_layer: Control = null
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_cfg = SimpleHUDConfigScript.new()
 	_cfg.load_all()
+	UserPreferencesScript.merge_into(_cfg)
+	log_diag(
+		"Ready: preset numeric_only=%s health_radial_cfg=%s get_radial(health)=%s"
+		% [_cfg.numeric_only, _cfg.radial.get(SimpleHUDConfigScript.STAT_HEALTH, false), _cfg.get_radial(SimpleHUDConfigScript.STAT_HEALTH)]
+	)
+	Engine.set_meta(&"SimpleHUDMain", self)
+
+
+func _unhandled_input(ev: InputEvent) -> void:
+	if !ev.is_action_pressed(&"ui_cancel"):
+		return
+	var p: Control = _simplehud_main_menu_panel_layer
+	if p == null || !is_instance_valid(p) || !p.visible:
+		return
+	close_simplehud_menu_panel()
+	var vp := get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
+
+
+## Called by Return, Escape (`ui_cancel`), and clicking the dim backdrop.
+func close_simplehud_menu_panel() -> void:
+	var panel: Control = _simplehud_main_menu_panel_layer
+	if panel != null && is_instance_valid(panel):
+		panel.hide()
+	var menu_root: Control = _simplehud_main_menu_scene
+	if menu_root != null && is_instance_valid(menu_root):
+		var main_blk: Node = menu_root.get_node_or_null("Main")
+		if main_blk != null:
+			main_blk.show()
+	if menu_root != null && menu_root.has_method(&"PlayClick"):
+		menu_root.call(&"PlayClick")
+
+
+func log_diag(msg: String) -> void:
+	if SIMPLEHUD_DIAG_LOG:
+		print("[SimpleHUD] ", msg)
+
+
+func log_menu_panel_diag(msg: String) -> void:
+	if !(SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG):
+		return
+	print("[SimpleHUD][MenuPanel] ", msg)
+
+
+func _menu_panel_control_line(tag: String, c: Control) -> void:
+	if c == null || !is_instance_valid(c):
+		log_menu_panel_diag("%s <null>" % tag)
+		return
+	var gr: Rect2 = c.get_global_rect()
+	log_menu_panel_diag(
+		"%s name=\"%s\" visible=%s in_tree=%s size=%s global_rect=[%s … %s] min_size=%s modulate=%s z=%s clip=%s mouse_filter=%s"
+		% [
+			tag,
+			c.name,
+			c.visible,
+			c.is_visible_in_tree(),
+			c.size,
+			gr.position,
+			gr.position + gr.size,
+			c.custom_minimum_size,
+			c.modulate,
+			c.z_index,
+			c.clip_contents,
+			c.mouse_filter,
+		]
+	)
+
+
+func _dump_simplehud_menu_panel_layout(stage: String) -> void:
+	if !(SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG):
+		return
+	var vp := get_viewport()
+	var vp_sz: Vector2 = vp.get_visible_rect().size if vp != null else Vector2.ZERO
+	log_menu_panel_diag("layout_dump stage=\"%s\" viewport_size=%s" % [stage, vp_sz])
+	var panel: Control = _simplehud_main_menu_panel_layer
+	if panel == null || !is_instance_valid(panel):
+		log_menu_panel_diag("layout_dump: _simplehud_main_menu_panel_layer invalid")
+		return
+	_menu_panel_control_line("  panel", panel)
+	var inner := panel.get_node_or_null("SimpleHUDInner") as Control
+	_menu_panel_control_line("  inner", inner)
+	if inner != null:
+		for i in inner.get_child_count():
+			var ch: Node = inner.get_child(i)
+			if ch is Control:
+				_menu_panel_control_line("    inner[%d]" % i, ch as Control)
+	var margin: MarginContainer = null
+	if inner != null:
+		for i in inner.get_child_count():
+			var ich: Node = inner.get_child(i)
+			if ich is MarginContainer:
+				margin = ich as MarginContainer
+				break
+	var scroll: ScrollContainer = null
+	if margin != null && margin.get_child_count() > 0:
+		var mch: Node = margin.get_child(0)
+		if mch is ScrollContainer:
+			scroll = mch as ScrollContainer
+	if scroll != null:
+		log_menu_panel_diag(
+			"  scroll follow_focus=%s h_mode=%s v_mode=%s child_count=%s"
+			% [
+				scroll.follow_focus,
+				scroll.horizontal_scroll_mode,
+				scroll.vertical_scroll_mode,
+				scroll.get_child_count(),
+			]
+		)
+		if scroll.get_child_count() > 0:
+			var vbox: Control = scroll.get_child(0) as Control
+			_menu_panel_control_line("  scroll→child[0] (vbox)", vbox)
+			log_menu_panel_diag("  vbox children=%d" % vbox.get_child_count())
+			if vbox.get_child_count() > 0:
+				_menu_panel_control_line("    vbox[0]", vbox.get_child(0) as Control)
+			if vbox.get_child_count() > 1:
+				_menu_panel_control_line("    vbox[1]", vbox.get_child(1) as Control)
+	else:
+		log_menu_panel_diag("  scroll/margin chain missing (expected MarginContainer→ScrollContainer)")
+	var dim: Control = panel.get_child(0) as Control if panel.get_child_count() > 0 else null
+	if dim != null && str(dim.name) != "SimpleHUDInner":
+		_menu_panel_control_line("  dim[0]", dim)
+	log_menu_panel_diag("  panel node path: %s" % str(panel.get_path()))
+
+
+func _menu_panel_open_diag_async() -> void:
+	if !(SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG):
+		return
+	## Two frames after open so Controls have had a chance to layout.
+	await get_tree().process_frame
+	_dump_simplehud_menu_panel_layout("open+1frame")
+	await get_tree().process_frame
+	_dump_simplehud_menu_panel_layout("open+2frame")
+
+
+func _game_data_menu_open(gd: Resource) -> bool:
+	if gd == null || !is_instance_valid(gd):
+		return false
+	var v: Variant = gd.get("menu")
+	if v == null:
+		return false
+	return bool(v)
+
+
+## Injects a "SimpleHUD" `res://Scenes/Menu.tscn` — `Main/Buttons` (sibling to "New", "Load game", …) and a full-screen settings layer. See `Auxillary/References/.../Scripts/Menu.gd` + `Scenes/Menu.tscn`.
+func _try_install_simplehud_main_menu() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var sc: Node = tree.current_scene
+	if sc == null or str(sc.name) != "Menu":
+		return
+	if sc.get_meta("_simplehud_main_menu_installed", false):
+		return
+	var buttons: Node = sc.get_node_or_null("Main/Buttons")
+	if buttons == null:
+		return
+	var quit_btn: Node = buttons.get_node_or_null("Quit")
+	var insert_idx: int = quit_btn.get_index() if quit_btn != null else buttons.get_child_count()
+	var simple_btn := Button.new()
+	simple_btn.name = "SimpleHUD"
+	simple_btn.text = "SimpleHUD"
+	simple_btn.custom_minimum_size = Vector2(0, 40)
+	simple_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	buttons.add_child(simple_btn)
+	buttons.move_child(simple_btn, insert_idx)
+	var panel := Control.new()
+	panel.name = "SimpleHUDPanel"
+	panel.visible = false
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.z_index = 100
+	sc.add_child(panel)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_child(dim)
+	dim.gui_input.connect(
+		func (ev: InputEvent) -> void:
+			if ev is InputEventMouseButton && ev.pressed && ev.button_index == MOUSE_BUTTON_LEFT:
+				close_simplehud_menu_panel()
+	)
+	var inner := Control.new()
+	inner.name = "SimpleHUDInner"
+	inner.mouse_filter = Control.MOUSE_FILTER_STOP
+	inner.set_anchors_preset(Control.PRESET_CENTER)
+	inner.offset_left = -256.0
+	inner.offset_top = -352.0
+	inner.offset_right = 256.0
+	inner.offset_bottom = 352.0
+	panel.add_child(inner)
+	var bg := ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color(0.08, 0.08, 0.08, 0.95)
+	inner.add_child(bg)
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 16)
+	margin.add_theme_constant_override("margin_right", 16)
+	margin.add_theme_constant_override("margin_top", 16)
+	margin.add_theme_constant_override("margin_bottom", 16)
+	inner.add_child(margin)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	margin.add_child(scroll)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(vbox)
+	var panel_ui = SimpleHUDSettingsPanelScript.new(sc as Control, panel)
+	_simplehud_main_menu_scene = sc as Control
+	_simplehud_main_menu_panel_layer = panel
+	panel_ui.build(vbox)
+	if SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG:
+		log_menu_panel_diag(
+			"installed: menu_scene=%s panel_index_in_scene=%s vbox_children=%s"
+			% [str(sc.name), panel.get_index(), vbox.get_child_count()]
+		)
+		_dump_simplehud_menu_panel_layout("install_immediate")
+	sc.set_meta(&"_simplehud_main_menu_installed", true)
+	sc.set_meta(&"_simplehud_panel_controller", panel_ui)
+	simple_btn.pressed.connect(
+		func () -> void:
+			if sc.has_method(&"PlayClick"):
+				sc.call(&"PlayClick")
+			panel.show()
+			var main_blk: Node = sc.get_node_or_null("Main")
+			if main_blk != null:
+				main_blk.hide()
+			if panel_ui.has_method(&"sync_from_main"):
+				panel_ui.call(&"sync_from_main")
+			log_menu_panel_diag("button pressed: panel.visible=%s" % panel.visible)
+			if SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG:
+				_menu_panel_open_diag_async()
+	)
+	log_diag("Main menu (Menu.tscn): SimpleHUD button + panel installed.")
+
+
+func get_status_tray_settings_for_ui() -> Dictionary:
+	return {
+		"auto_hide": bool(_cfg.status_auto_hide_when_none),
+		"anchor": str(_cfg.status_anchor),
+		"padding_px": float(_cfg.status_padding_px),
+		"spacing_px": float(_cfg.status_spacing_px),
+		"scale_pct": float(_cfg.status_scale_pct),
+		"inactive_alpha_pct": clampf(float(_cfg.status_inactive_alpha), 0.0, 1.0) * 100.0,
+		"mode": str(_cfg.status_mode),
+		"stack_direction": str(_cfg.status_stack_direction),
+		"strip_alignment": str(_cfg.status_strip_alignment),
+		"r": int(_cfg.status_color_r),
+		"g": int(_cfg.status_color_g),
+		"b": int(_cfg.status_color_b),
+		"inactive_r": int(_cfg.status_inactive_r),
+		"inactive_g": int(_cfg.status_inactive_g),
+		"inactive_b": int(_cfg.status_inactive_b),
+	}
+
+
+func apply_status_tray_settings_from_ui(
+	auto_hide_empty_tray: bool,
+	anchor_key: String,
+	padding_px: float,
+	spacing_px: float,
+	scale_pct: float,
+	inactive_alpha_pct: float,
+	r: int,
+	g: int,
+	b: int,
+	stack_direction: String,
+	strip_align_key: String,
+	inactive_r: int,
+	inactive_g: int,
+	inactive_b: int,
+) -> void:
+	_cfg.status_auto_hide_when_none = auto_hide_empty_tray
+	if auto_hide_empty_tray:
+		_cfg.status_mode = "inflicted_only"
+	else:
+		_cfg.status_mode = "always"
+	_cfg.status_anchor = UserPreferencesScript.normalize_anchor(anchor_key)
+	_cfg.status_padding_px = clampf(padding_px, 0.0, 512.0)
+	_cfg.status_spacing_px = clampf(spacing_px, 0.0, 64.0)
+	_cfg.status_scale_pct = clampf(scale_pct, 25.0, 400.0)
+	_cfg.status_inactive_alpha = clampf(float(inactive_alpha_pct) / 100.0, 0.0, 1.0)
+	_cfg.status_color_r = clampi(r, 0, 255)
+	_cfg.status_color_g = clampi(g, 0, 255)
+	_cfg.status_color_b = clampi(b, 0, 255)
+	_cfg.status_inactive_r = clampi(inactive_r, 0, 255)
+	_cfg.status_inactive_g = clampi(inactive_g, 0, 255)
+	_cfg.status_inactive_b = clampi(inactive_b, 0, 255)
+	_cfg.status_stack_direction = str(stack_direction)
+	_cfg.status_strip_alignment = UserPreferencesScript.normalize_status_strip_alignment(strip_align_key)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	log_diag(
+		"Status tray: mode=%s stack=%s align=%s auto_hide_empty=%s inactive_alpha=%.0f%% active_rgb=(%d,%d,%d) inactive_rgb=(%d,%d,%d)"
+		% [
+			_cfg.status_mode,
+			_cfg.status_stack_direction,
+			_cfg.status_strip_alignment,
+			auto_hide_empty_tray,
+			inactive_alpha_pct,
+			r,
+			g,
+			b,
+			inactive_r,
+			inactive_g,
+			inactive_b,
+		]
+	)
+	refresh_hud_layout()
+
+
+func apply_numeric_only_from_ui(on: bool) -> void:
+	_cfg.numeric_only = on
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	log_diag("general.numeric_only set to %s (affects all radial toggles)" % on)
+	refresh_hud_layout()
+
+
+func get_vitals_strip_settings_for_ui() -> Dictionary:
+	return {
+		"spacing_px": float(_cfg.vitals_spacing_default_px),
+		"strip_alignment": str(_cfg.vitals_strip_alignment),
+		"numeric_only": bool(_cfg.numeric_only),
+	}
+
+
+func apply_vitals_strip_settings_from_ui(spacing_px: float, strip_alignment_key: String = "") -> void:
+	_cfg.vitals_spacing_default_px = clampf(spacing_px, 0.0, 256.0)
+	if strip_alignment_key != "":
+		_cfg.vitals_strip_alignment = UserPreferencesScript.normalize_strip_alignment(strip_alignment_key)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	refresh_hud_layout()
+
+
+func get_simplehud_active_preset_id() -> String:
+	if _cfg == null:
+		return ""
+	return str(_cfg.get_meta(&"simplehud_active_preset", ""))
+
+
+func get_simplehud_preset_dropdown_index_for_active() -> int:
+	var id := get_simplehud_active_preset_id()
+	if id == "":
+		return 0
+	for i in range(SimpleHUDPresetsReg.PRESETS.size()):
+		if str(SimpleHUDPresetsReg.PRESETS[i].get("id", "")) == id:
+			return i + 1
+	return 0
+
+
+func get_simplehud_preset_id_at_dropdown_index(idx: int) -> String:
+	if idx <= 0:
+		return ""
+	var list: Array = SimpleHUDPresetsReg.PRESETS
+	var j := idx - 1
+	if j < 0 || j >= list.size():
+		return ""
+	return str(list[j].get("id", ""))
+
+
+func apply_simplehud_preset(preset_id: String) -> bool:
+	var path := ""
+	for d in SimpleHUDPresetsReg.PRESETS:
+		if str(d.get("id", "")) == preset_id:
+			path = str(d.get("script", ""))
+			break
+	if path == "":
+		log_diag("apply_simplehud_preset: unknown preset id %s" % preset_id)
+		return false
+	var scr: GDScript = load(path) as GDScript
+	if scr == null:
+		push_warning("SimpleHUD: could not load preset script %s" % path)
+		return false
+	var nu: RefCounted = scr.new() as RefCounted
+	if nu == null || !(nu as Object).has_method(&"apply_full_preset_defaults"):
+		push_warning("SimpleHUD: preset script missing apply_full_preset_defaults: %s" % path)
+		return false
+	(nu as RefCounted).call(&"apply_full_preset_defaults")
+	_cfg = nu
+	_cfg.set_meta(&"simplehud_active_preset", preset_id)
+	UserPreferencesScript.merge_into(_cfg)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	if is_instance_valid(_overlay):
+		_overlay.apply_live_config(_cfg)
+	log_diag("Applied SimpleHUD preset id=%s" % preset_id)
+	refresh_hud_layout()
+	return true
+
+
+func get_stat_settings_for_ui(stat_id: StringName) -> Dictionary:
+	var gradient_mode := "preset"
+	var grad_copy: Dictionary = {}
+	if _cfg.stat_gradient_overrides.has(stat_id):
+		var gv: Variant = _cfg.stat_gradient_overrides[stat_id]
+		if gv is Dictionary:
+			grad_copy = (gv as Dictionary).duplicate(true)
+			var gm := str(grad_copy.get("mode", "gradient")).to_lower()
+			if gm == "white_only" || gm == "white":
+				gradient_mode = "white"
+			else:
+				gradient_mode = "custom"
+	return {
+		"radial": bool(_cfg.radial.get(stat_id, true)),
+		"anchor": _cfg.get_vitals_anchor(stat_id),
+		"padding_px": float(_cfg.get_vitals_padding_px(stat_id)),
+		"spacing_px": float(_cfg.get_spacing_after_stat(stat_id)),
+		"scale_pct": float(_cfg.get_vitals_scale_pct(stat_id)),
+		"visible_threshold_pct": float(_cfg.get_threshold(stat_id)),
+		"numeric_only_global": bool(_cfg.numeric_only),
+		"gradient_mode": gradient_mode,
+		"gradient": grad_copy,
+	}
+
+
+func _apply_stat_dict_to_cfg(sid: StringName, stat_dict: Dictionary) -> void:
+	if stat_dict.has("radial"):
+		_cfg.radial[sid] = bool(stat_dict["radial"])
+	if stat_dict.has("anchor"):
+		_cfg.vitals_anchor[sid] = UserPreferencesScript.normalize_anchor(str(stat_dict["anchor"]))
+	if stat_dict.has("padding_px"):
+		_cfg.vitals_padding_px[sid] = clampf(float(stat_dict["padding_px"]), 0.0, 512.0)
+	if stat_dict.has("spacing_px"):
+		_cfg.vitals_spacing_px[sid] = clampf(float(stat_dict["spacing_px"]), 0.0, 256.0)
+	if stat_dict.has("scale_pct"):
+		_cfg.vitals_scale_pct[sid] = clampf(float(stat_dict["scale_pct"]), 25.0, 400.0)
+	if stat_dict.has("visible_threshold_pct"):
+		_cfg.visible_threshold[sid] = float(stat_dict["visible_threshold_pct"])
+	if stat_dict.has("gradient_mode"):
+		match String(stat_dict["gradient_mode"]):
+			"preset":
+				_cfg.stat_gradient_overrides.erase(sid)
+			"white":
+				_cfg.stat_gradient_overrides[sid] = {"mode": "white_only"}
+			"custom":
+				var gv: Variant = stat_dict.get("gradient", {})
+				if gv is Dictionary:
+					_cfg.stat_gradient_overrides[sid] = (gv as Dictionary).duplicate(true)
+
+
+func _maybe_disable_numeric_only_for_radial(stat_dict: Dictionary) -> void:
+	if bool(stat_dict.get("radial", false)) && _cfg.numeric_only:
+		_cfg.numeric_only = false
+		log_diag(
+			"general.numeric_only was true (common on TextNumeric* presets); cleared so radial vitals can render. Re-enable via HUD checkbox if you want text-only."
+		)
+
+
+func apply_stat_settings_from_ui(stat_id: StringName, stat_dict: Dictionary) -> void:
+	_apply_stat_dict_to_cfg(stat_id, stat_dict)
+	_maybe_disable_numeric_only_for_radial(stat_dict)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	log_diag(
+		"Stat %s: radial_cfg=%s numeric_only=%s get_radial=%s"
+		% [stat_id, _cfg.radial.get(stat_id, false), _cfg.numeric_only, _cfg.get_radial(stat_id)]
+	)
+	refresh_hud_layout()
+
+
+func apply_stat_settings_to_all_from_ui(stat_dict: Dictionary) -> void:
+	for sid in SimpleHUDConfigScript.STAT_IDS:
+		_apply_stat_dict_to_cfg(sid, stat_dict.duplicate(true))
+	_maybe_disable_numeric_only_for_radial(stat_dict)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	log_diag(
+		"Batch vitals: numeric_only=%s sample get_radial(health)=%s"
+		% [_cfg.numeric_only, _cfg.get_radial(SimpleHUDConfigScript.STAT_HEALTH)]
+	)
+	refresh_hud_layout()
+
+
+func refresh_hud_layout() -> void:
+	## Run next frame so OptionButton/SpinBox/etc. have committed values and GameData refs are stable.
+	call_deferred("_refresh_hud_layout_impl")
+
+
+func _refresh_hud_layout_impl() -> void:
+	if !is_instance_valid(_overlay):
+		if !_logged_overlay_missing_refresh:
+			log_diag("_refresh_hud_layout_impl: overlay not bound yet (settings saved; applies when HUD loads).")
+			_logged_overlay_missing_refresh = true
+		return
+	_logged_overlay_missing_refresh = false
+	var hud: Control = _resolve_hud()
+	var prefs := _load_preferences()
+	var vitals_on: bool = _prefs_bool(prefs, &"vitals", true)
+	var medical_on: bool = _prefs_bool(prefs, &"medical", true)
+	_overlay.configure_hud_prefs(vitals_on, medical_on)
+	if hud != null:
+		_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
+	var live := _resolve_live_game_data(hud)
+	if live != null && is_instance_valid(live):
+		_overlay.set_live_game_data(live)
+	else:
+		_overlay.set_live_game_data(game_data)
+	var gd_menu: Resource = live if live != null && is_instance_valid(live) else game_data
+	var menu_hide := _game_data_menu_open(gd_menu)
+	var show_layer: bool = !menu_hide
+	_overlay.tick(0.0, true)
+	_overlay.notify_config_changed()
+	var vp_sz: Vector2 = (
+		get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1920, 1080)
+	)
+	_overlay.layout_for_viewport(vp_sz, show_layer)
 
 
 func _process(delta: float) -> void:
+	_try_install_simplehud_main_menu()
 	if !_cfg.enabled:
 		return
 
@@ -70,21 +595,26 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
 
 	var live := _resolve_live_game_data(hud)
-	_overlay.set_live_game_data(live)
+	if live != null && is_instance_valid(live):
+		_overlay.set_live_game_data(live)
+	else:
+		_overlay.set_live_game_data(game_data)
 
-	var menu_hide: bool = false
-	if live != null:
-		menu_hide = bool(live.menu)
+	var gd_menu: Resource = live if live != null && is_instance_valid(live) else game_data
+	var menu_hide := _game_data_menu_open(gd_menu)
 
 	# Drive our vitals strip only from pause/menu — not from HUD/Stats.visible. The game may hide the
 	# Stats node while gameplay values are still meaningful; tying show_layer to it skipped tick()
 	# and left the overlay blank (no updates, widgets never filled in).
 	var show_layer: bool = !menu_hide
 
-	_overlay.layout_for_viewport(get_viewport().get_visible_rect().size, show_layer)
-
 	if show_layer:
 		_overlay.tick(delta)
+
+	var vp_sz: Vector2 = (
+		get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1920, 1080)
+	)
+	_overlay.layout_for_viewport(vp_sz, show_layer)
 
 	_apply_fps_map(hud, prefs)
 

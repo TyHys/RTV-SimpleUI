@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT_DIR="$ROOT/mod"
-# Full Config.gd variants live here (standalone; not bundled inside preset VMZs—only copied into staged SimpleHUD/Config.gd).
+# Each preset is a small class extending SimpleHUDConfigCore.gd; the build copies it onto staged SimpleHUD/Config.gd (stable load path).
 PRESETS_DIR="$ROOT/presets"
 
 mkdir -p "$OUT_DIR"
@@ -12,6 +12,16 @@ if [ ! -d "$ROOT/SimpleHUD" ] || [ ! -f "$ROOT/mod.txt" ] || [ ! -f "$ROOT/Simpl
 	echo "SimpleHUD bundle incomplete in $ROOT (need mod.txt, SimpleHUD.default.ini, SimpleHUD/, presets/)" >&2
 	exit 1
 fi
+
+## Copy each preset Config into SimpleHUD/preset_configs/ so the runtime main-menu preset dropdown can load them (same sources as presets/<Name>/Config.gd).
+mkdir -p "$ROOT/SimpleHUD/preset_configs"
+for preset_dir in "$PRESETS_DIR"/*/ ; do
+	[[ -d "$preset_dir" ]] || continue
+	name=$(basename "$preset_dir")
+	if [[ -f "${preset_dir}Config.gd" ]]; then
+		cp "${preset_dir}Config.gd" "$ROOT/SimpleHUD/preset_configs/${name}.gd"
+	fi
+done
 
 ROOT="$ROOT" OUT_DIR="$OUT_DIR" PRESETS_DIR="$PRESETS_DIR" python3 - <<'PY'
 import pathlib
@@ -46,7 +56,7 @@ for preset_dir in preset_paths:
 		# Runtime package only — preset sources stay under ROOT/presets (not zipped).
 		shutil.copytree(root / "SimpleHUD", stage / "SimpleHUD")
 
-		# Inject preset config as active runtime config for this bundle.
+		# Replace repo Config.gd (entrypoint) with this preset; implementation stays in SimpleHUDConfigCore.gd.
 		shutil.copy2(preset_config, stage / "SimpleHUD" / "Config.gd")
 
 		with zipfile.ZipFile(out_file, "w", compression=zipfile.ZIP_DEFLATED) as zf:
