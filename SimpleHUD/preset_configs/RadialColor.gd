@@ -21,10 +21,10 @@ radial=true
 visible_threshold=79.0
 radial=true
 [stamina]
-visible_threshold=50.0
+visible_threshold=79.0
 radial=true
 [fatigue]
-visible_threshold=50.0
+visible_threshold=79.0
 radial=true
 [status_icons]
 mode=\"inflicted_only\"

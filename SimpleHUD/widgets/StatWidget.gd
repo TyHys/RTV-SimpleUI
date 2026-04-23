@@ -19,6 +19,8 @@ var _label: Label
 var _radial: RADIAL_SCRIPT
 var _built_radial: bool = false
 var _cfg: RefCounted
+var _last_layout_scale: float = -1.0
+var _last_layout_radial: bool = false
 
 const _BASE_FONT := 13
 const _BASE_OUTLINE := 6
@@ -60,7 +62,9 @@ func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_rad
 		_label = l
 
 	_built_radial = use_radial
-	_sync_layout_scale()
+	_last_layout_scale = -1.0
+	_last_layout_radial = use_radial
+	_sync_layout_scale(true)
 
 func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_mult: float) -> void:
 	if use_radial != _built_radial:
@@ -81,16 +85,21 @@ func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_
 	elif _label:
 		_label.text = "%s %d" % [title, int(round(percent))]
 	_apply_text_color(percent)
-	_sync_layout_scale()
+	_sync_layout_scale(false)
 
 
-func _sync_layout_scale() -> void:
+func _sync_layout_scale(force: bool) -> void:
 	var sc := 1.0
 	var cfg_txt := _cfg as SimpleHudConfigScript
 	if cfg_txt != null:
 		sc = clampf(float(cfg_txt.get_vitals_scale_pct(stat_id)) / 100.0, 0.25, 4.0)
 
 	var use_radial := _built_radial && _radial != null
+	if !force && is_equal_approx(sc, _last_layout_scale) && use_radial == _last_layout_radial:
+		return
+	_last_layout_scale = sc
+	_last_layout_radial = use_radial
+
 	if use_radial:
 		custom_minimum_size = Vector2(56.0, 56.0) * sc
 		if _radial != null:

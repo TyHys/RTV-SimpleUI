@@ -10,7 +10,7 @@ SimpleHUD focuses on readable, context-driven information:
 
 - **Unneeded clutter is hidden:** stats and status elements can stay out of view until they matter (based on configured thresholds and status conditions).
 - **Affliction/status icons are context-aware:** by default, only active/afflicted conditions are shown in the status tray.
-- **Transparency options are flexible:** use dynamic urgency-based fading, static full visibility, or fixed-opacity vitals.
+- **Transparency options are flexible:** choose dynamic urgency-based fading, or static opacity with an adjustable percentage.
 - **Two stat display styles:** choose either numeric text values or icon-centered radial donut charts (think stamina bars from Breath of the Wild).
 - **NoHide-style behavior available:** presets and UI settings support always-visible, high-readability variants.
 
@@ -21,7 +21,7 @@ Open the game main menu and click **SimpleHUD**:
 - Pick any built-in preset from the preset dropdown
 - See **Current Preset** status (`Preset Name` or `User Customized`)
 - Expand **Customize** and tune:
-  - **Vitals**: edge, order, spacing, thresholds, transparency mode, gradient colors/thresholds
+  - **Vitals**: edge, order, spacing, thresholds, transparency mode (dynamic/static + static opacity), gradient colors/thresholds
   - **Ailments**: edge/order, spacing/scale, active+inactive tint, inactive opacity
 
 All changes apply live and are saved per-player.
@@ -62,6 +62,12 @@ SimpleHUD is built to be a configurable foundation:
 - transparency behavior
 - HUD placement and spacing controls
 - status icon and info layout controls
+
+## Recent Improvements
+
+- Runtime overhead reduced with cached preferences reads and pooled status icon rendering.
+- Stamina/fatigue now share the same default threshold behavior as other non-health vitals.
+- Debug diagnostics are quieter by default while preserving warning/error visibility.
 
 If you like to tune your HUD over time, this framework is meant to grow with your setup rather than lock you into one static style. If you have a vision for a HUD you feel is not possible with the current framework, please feel free to reach out to me. I would be willing to expand this featureset given the right vision.
 

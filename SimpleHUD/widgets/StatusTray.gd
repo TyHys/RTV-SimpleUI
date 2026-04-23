@@ -4,18 +4,38 @@ var _game_data: Resource
 var _cfg: RefCounted
 
 var _box: Container
+var _icon_nodes: Dictionary = {}
+static var _texture_cache: Dictionary = {}
+var _warned_missing_status_prop: Dictionary = {}
+var _diag_tick: int = 0
 
 func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_game_data = game_data
 	_cfg = cfg
 
-	for c in get_children():
-		c.queue_free()
-
-	if _cfg.status_stack_direction == "horizontal_left":
-		_box = HBoxContainer.new()
-	else:
-		_box = VBoxContainer.new()
+	var horizontal: bool = str(_cfg.status_stack_direction) == "horizontal_left"
+	var rebuild := _box == null
+	if !rebuild:
+		rebuild = horizontal && !(_box is HBoxContainer)
+	if !rebuild:
+		rebuild = !horizontal && !(_box is VBoxContainer)
+	if rebuild:
+		for c in get_children():
+			c.queue_free()
+		_icon_nodes.clear()
+		if horizontal:
+			_box = HBoxContainer.new()
+		else:
+			_box = VBoxContainer.new()
+		add_child(_box)
+		_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_box.offset_left = 0.0
+		_box.offset_top = 0.0
+		_box.offset_right = 0.0
+		_box.offset_bottom = 0.0
+		_ensure_icon_nodes()
+	elif _icon_nodes.is_empty():
+		_ensure_icon_nodes()
 
 	match str(_cfg.get_status_strip_alignment()):
 		"center":
@@ -26,12 +46,6 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 			_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 
 	_box.add_theme_constant_override("separation", int(_cfg.status_spacing_px))
-	add_child(_box)
-	_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_box.offset_left = 0.0
-	_box.offset_top = 0.0
-	_box.offset_right = 0.0
-	_box.offset_bottom = 0.0
 
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -68,72 +82,44 @@ func refresh() -> void:
 	if !is_instance_valid(_game_data) || _box == null:
 		return
 
+	_diag_tick += 1
 	var mode: String = str(_cfg.status_mode)
-	for c in _box.get_children():
-		c.queue_free()
-
 	if mode == "hidden":
 		visible = false
 		return
 
 	visible = true
+	var active_color: Color = _cfg.get_status_icon_color()
+	var inactive_rgb: Color = _cfg.get_status_inactive_icon_color()
+	var ina: float = clampf(float(_cfg.status_inactive_alpha), 0.0, 1.0)
+	var px := float(_cfg.status_icon_size_px) * float(_cfg.status_scale_pct) / 100.0
 
 	for row in _icon_paths():
 		var flag: StringName = row[0]
 		var path: String = row[1]
-		var active := false
-		match flag:
-			&"overweight":
-				active = _game_data.overweight
-			&"starvation":
-				active = _game_data.starvation
-			&"dehydration":
-				active = _game_data.dehydration
-			&"bleeding":
-				active = _game_data.bleeding
-			&"fracture":
-				active = _game_data.fracture
-			&"burn":
-				active = _game_data.burn
-			&"frostbite":
-				active = _game_data.frostbite
-			&"insanity":
-				active = _game_data.insanity
-			&"poisoning":
-				active = _game_data.poisoning
-			&"rupture":
-				active = _game_data.rupture
-			&"headshot":
-				active = _game_data.headshot
-
-		if mode == "inflicted_only" && !active:
+		var tr := _icon_nodes.get(flag, null) as TextureRect
+		if tr == null:
 			continue
+		# Retry icon load lazily if initial setup occurred before resource became available.
+		if tr.texture == null:
+			tr.texture = _load_texture_cached(path)
+		var active := _flag_active(flag)
+		if mode == "inflicted_only":
+			tr.visible = active
+		else:
+			tr.visible = true
 
-		var tex: Texture2D = load(path)
-		if tex == null:
-			continue
-
-		var tr := TextureRect.new()
-		tr.texture = tex
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		var px := float(_cfg.status_icon_size_px) * float(_cfg.status_scale_pct) / 100.0
 		tr.custom_minimum_size = Vector2.ONE * px
 		tr.size = tr.custom_minimum_size
 		tr.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		tr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		var active_color: Color = _cfg.get_status_icon_color()
-		var inactive_rgb: Color = _cfg.get_status_inactive_icon_color()
-		var ina: float = 0.25
-		if _cfg != null:
-			ina = clampf(float(_cfg.status_inactive_alpha), 0.0, 1.0)
 		match mode:
 			"always":
 				tr.modulate = active_color if active else Color(inactive_rgb.r, inactive_rgb.g, inactive_rgb.b, ina)
 			_:
 				tr.modulate = active_color
-
-		_box.add_child(tr)
 
 	var min_size: Vector2 = _box.get_combined_minimum_size()
 	var base_px := float(_cfg.status_icon_size_px) * float(_cfg.status_scale_pct) / 100.0
@@ -141,14 +127,96 @@ func refresh() -> void:
 		min_size = Vector2.ONE * base_px
 	custom_minimum_size = min_size
 	size = min_size
+	if _diag_tick % 180 == 0:
+		_tray_diag(
+			"refresh mode=%s visible_icons=%d total_icons=%d game_data=%s"
+			% [mode, get_icon_count(), _icon_nodes.size(), str(_game_data)]
+		)
 
 
 func get_icon_count() -> int:
 	if _box == null:
 		return 0
-	return _box.get_child_count()
+	var count := 0
+	for c in _box.get_children():
+		if c is CanvasItem && (c as CanvasItem).visible:
+			count += 1
+	return count
 
 
-func _physics_process(_delta: float) -> void:
-	if Engine.get_physics_frames() % 12 == 0:
-		refresh()
+func _ensure_icon_nodes() -> void:
+	if _box == null:
+		return
+	for row in _icon_paths():
+		var flag: StringName = row[0]
+		var path: String = row[1]
+		var tr := TextureRect.new()
+		tr.name = String(flag)
+		tr.texture = _load_texture_cached(path)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		tr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_box.add_child(tr)
+		_icon_nodes[flag] = tr
+
+
+func _load_texture_cached(path: String) -> Texture2D:
+	if _texture_cache.has(path):
+		return _texture_cache[path] as Texture2D
+	var tex: Texture2D = load(path) as Texture2D
+	if tex != null:
+		_texture_cache[path] = tex
+	return tex
+
+
+func _flag_active(flag: StringName) -> bool:
+	match flag:
+		&"overweight":
+			return _status_flag_bool(["overweight"])
+		&"starvation":
+			return _status_flag_bool(["starvation"])
+		&"dehydration":
+			return _status_flag_bool(["dehydration"])
+		&"bleeding":
+			return _status_flag_bool(["bleeding"])
+		&"fracture":
+			return _status_flag_bool(["fracture"])
+		&"burn":
+			return _status_flag_bool(["burn"])
+		&"frostbite":
+			return _status_flag_bool(["frostbite"])
+		&"insanity":
+			return _status_flag_bool(["insanity"])
+		&"poisoning":
+			return _status_flag_bool(["poisoning"])
+		&"rupture":
+			return _status_flag_bool(["rupture"])
+		&"headshot":
+			return _status_flag_bool(["headshot", "head_shot"])
+		_:
+			return false
+
+
+func _status_flag_bool(keys: Array) -> bool:
+	if _game_data == null || !is_instance_valid(_game_data):
+		return false
+	for k in keys:
+		var key: String = str(k)
+		var v: Variant = _game_data.get(key)
+		if v != null:
+			return bool(v)
+	var primary: String = str(keys[0]) if keys.size() > 0 else "<unknown>"
+	if !_warned_missing_status_prop.get(primary, false):
+		_warned_missing_status_prop[primary] = true
+		_tray_diag(
+			"missing status property '%s' on game_data type=%s"
+			% [primary, _game_data.get_class()]
+		)
+	return false
+
+
+func _tray_diag(msg: String) -> void:
+	var mm: Variant = Engine.get_meta(&"SimpleHUDMain", null)
+	if mm != null && (mm as Object).has_method(&"log_diag"):
+		(mm as Node).call(&"log_diag", "[StatusTray] %s" % msg)

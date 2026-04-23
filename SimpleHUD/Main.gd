@@ -9,11 +9,11 @@ const UserPreferencesScript := preload("res://SimpleHUD/UserPreferences.gd")
 const SimpleHUDSettingsPanelScript := preload("res://SimpleHUD/SimpleHUDSettingsPanel.gd")
 const SimpleHUDPresetsReg := preload("res://SimpleHUD/PresetsRegistry.gd")
 
-## Set false to silence `[SimpleHUD]` prints (preferences still save).
-const SIMPLEHUD_DIAG_LOG := true
+## Set true to enable verbose console diagnostics during development.
+const SIMPLEHUD_DIAG_LOG := false
 
-## Verbose diagnostics for main-menu SimpleHUD overlay (sizes, visibility, deferred layout). Set false to reduce console noise.
-const SIMPLEHUD_MENU_PANEL_DIAG := true
+## Verbose diagnostics for main-menu SimpleHUD overlay (sizes, visibility, deferred layout).
+const SIMPLEHUD_MENU_PANEL_DIAG := false
 
 var game_data: Resource = preload("res://Resources/GameData.tres")
 
@@ -24,6 +24,9 @@ var _overlay: SimpleHudOverlay
 
 ## Runtime `GameData` the game mutates (often not the same object identity as preload if the scene holds a live ref).
 var _live_game_data: Resource = null
+var _prefs_cache: Resource = null
+var _prefs_cache_frame: int = -10000
+const _PREFS_CACHE_TTL_FRAMES := 30
 
 var _logged_overlay_missing_refresh: bool = false
 
@@ -31,6 +34,9 @@ var _logged_overlay_missing_refresh: bool = false
 var _simplehud_main_menu_scene: Control = null
 var _simplehud_main_menu_panel_layer: Control = null
 var _simplehud_menu_inner: Control = null
+var _fps_info_node: Control = null
+var _next_menu_install_probe_frame: int = 0
+const _MENU_INSTALL_PROBE_INTERVAL_FRAMES := 10
 
 ## Menu card: was fixed 512×704 px so the dark fill was narrower than long label rows (~674 px). Size from viewport instead.
 const SIMPLEHUD_MENU_WIDTH_FRAC := 0.52
@@ -618,20 +624,21 @@ func get_stat_settings_for_ui(stat_id: StringName) -> Dictionary:
 
 func get_vitals_common_settings_for_ui() -> Dictionary:
 	var d := get_stat_settings_for_ui(SimpleHUDConfigScript.STAT_HEALTH)
-	var counts: Dictionary = {}
+	var min_t := 101.0
+	var all_same := true
+	var first_t := 0.0
+	var first := true
 	for sid in SimpleHUDConfigScript.STAT_IDS:
 		var t := float(_cfg.get_threshold(sid))
-		var key := str(snappedf(t, 0.01))
-		counts[key] = int(counts.get(key, 0)) + 1
-	var best_key := ""
-	var best_count := -1
-	for k in counts.keys():
-		var c := int(counts[k])
-		if c > best_count:
-			best_count = c
-			best_key = str(k)
-	if best_key != "":
-		d["visible_threshold_pct"] = float(best_key)
+		min_t = minf(min_t, t)
+		if first:
+			first_t = t
+			first = false
+		elif !is_equal_approx(t, first_t):
+			all_same = false
+	# Surface the strictest per-stat threshold so mixed legacy values are visible in UI.
+	d["visible_threshold_pct"] = min_t
+	d["thresholds_uniform"] = all_same
 	return d
 
 
@@ -693,7 +700,7 @@ func _refresh_hud_layout_impl() -> void:
 		return
 	_logged_overlay_missing_refresh = false
 	var hud: Control = _resolve_hud()
-	var prefs := _load_preferences()
+	var prefs := _load_preferences(false)
 	var vitals_on: bool = _prefs_bool(prefs, &"vitals", true)
 	var medical_on: bool = _prefs_bool(prefs, &"medical", true)
 	_overlay.configure_hud_prefs(vitals_on, medical_on)
@@ -716,8 +723,12 @@ func _refresh_hud_layout_impl() -> void:
 
 
 func _process(delta: float) -> void:
-	_try_install_simplehud_main_menu()
+	var frame := Engine.get_process_frames()
+	if frame >= _next_menu_install_probe_frame:
+		_next_menu_install_probe_frame = frame + _MENU_INSTALL_PROBE_INTERVAL_FRAMES
+		_try_install_simplehud_main_menu()
 	if !_cfg.enabled:
+		_clear_binding(true)
 		return
 
 	var hud: Control = _resolve_hud()
@@ -748,6 +759,7 @@ func _bind_hud(hud: Control) -> void:
 	_canvas_layer.add_child(_overlay)
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fps_info_node = null
 
 	_apply_overlay(hud, 0.0)
 
@@ -756,7 +768,7 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	if !is_instance_valid(_overlay):
 		return
 
-	var prefs := _load_preferences()
+	var prefs := _load_preferences(false)
 
 	var vitals_on: bool = _prefs_bool(prefs, &"vitals", true)
 	var medical_on: bool = _prefs_bool(prefs, &"medical", true)
@@ -801,8 +813,13 @@ func _sync_vanilla_hud_overrides(hud: Control, vitals_on: bool, medical_on: bool
 		mn.visible = false
 
 
-func _load_preferences() -> Resource:
-	return load("user://Preferences.tres") as Resource
+func _load_preferences(force_refresh: bool = false) -> Resource:
+	var frame := Engine.get_process_frames()
+	var expired := frame - _prefs_cache_frame >= _PREFS_CACHE_TTL_FRAMES
+	if force_refresh || _prefs_cache == null || !is_instance_valid(_prefs_cache) || expired:
+		_prefs_cache = load("user://Preferences.tres") as Resource
+		_prefs_cache_frame = frame
+	return _prefs_cache
 
 
 func _prefs_bool(prefs: Resource, key: StringName, fallback: bool) -> bool:
@@ -820,11 +837,18 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 	if info == null:
 		return
 
+	_ensure_fps_label_style(info)
 	info.scale = Vector2(_cfg.fps_map_scale, _cfg.fps_map_scale)
 	info.position = Vector2(_cfg.fps_map_offset_x, _cfg.fps_map_offset_y)
 	var a: float = clampf(float(_cfg.fps_map_alpha), 0.0, 1.0)
 	info.modulate = Color(1.0, 1.0, 1.0, a)
 
+func _ensure_fps_label_style(info: Control) -> void:
+	if info == null:
+		return
+	if _fps_info_node == info:
+		return
+	_fps_info_node = info
 	# Keep only the numeric FPS readout and force it white for readability.
 	var fps_label := info.get_node_or_null("FPS") as Label
 	if fps_label != null:
@@ -853,15 +877,33 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 		fps_value.offset_right = 40.0
 
 
-func _clear_binding() -> void:
+func _clear_binding(restore_vanilla: bool = false) -> void:
+	var bound_hud := _hud
 	if is_instance_valid(_canvas_layer):
 		_canvas_layer.queue_free()
 	elif is_instance_valid(_overlay):
 		_overlay.queue_free()
 	_canvas_layer = null
 	_overlay = null
+	_fps_info_node = null
+	if restore_vanilla && is_instance_valid(bound_hud):
+		_restore_vanilla_hud_visibility(bound_hud)
 	_hud = null
 	_live_game_data = null
+
+
+func _restore_vanilla_hud_visibility(hud: Control) -> void:
+	if hud == null || !is_instance_valid(hud):
+		return
+	var prefs := _load_preferences(true)
+	var vitals_on: bool = _prefs_bool(prefs, &"vitals", true)
+	var medical_on: bool = _prefs_bool(prefs, &"medical", true)
+	var vn := hud.get_node_or_null("Stats/Vitals") as Control
+	if vn != null:
+		vn.visible = vitals_on
+	var mn := hud.get_node_or_null("Stats/Medical") as Control
+	if mn != null:
+		mn.visible = medical_on
 
 
 func _resolve_live_game_data(for_hud: Control) -> Resource:

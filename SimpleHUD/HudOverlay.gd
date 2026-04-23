@@ -157,15 +157,6 @@ func _group_edge_padding(ids: Array, anchor: String) -> float:
 	var m := 0.0
 	for sid in ids:
 		m = maxf(m, float(_cfg.get_vitals_padding_px(sid)))
-
-	var any_radial := false
-	for sid in ids:
-		if bool(_cfg.get_radial(sid)):
-			any_radial = true
-			break
-
-	if any_radial:
-		m = maxf(m, 32.0)
 	return m
 
 
@@ -335,9 +326,10 @@ func _widget_place_size(w: Control) -> Vector2:
 func _layout_status_tray(vp: Vector2) -> void:
 	_tray.refresh()
 
-	var allow := _prefs_medical
-	if allow && bool(_cfg.status_auto_hide_when_none) && str(_cfg.status_mode) == "inflicted_only":
-		allow = allow && _tray.get_icon_count() > 0
+	var mode := str(_cfg.status_mode)
+	var allow := mode != "hidden"
+	if allow && bool(_cfg.status_auto_hide_when_none) && mode == "inflicted_only":
+		allow = _tray.get_icon_count() > 0
 
 	_tray.visible = allow
 	if !allow:

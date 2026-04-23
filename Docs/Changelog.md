@@ -4,6 +4,28 @@ All downloads are for the latest versions only. Previous version can be built us
 
 All notable changes to `SimpleHUD` are documented in this file.
 
+## [1.0.4] - 2026-04-23
+
+### Changed (runtime performance)
+- Cached `user://Preferences.tres` reads with frame-based refresh to avoid per-frame resource reloads.
+- Optimized status tray rendering to reuse icon nodes and cached textures instead of rebuilding/queue-freeing per refresh.
+- Reduced per-frame UI churn by applying FPS label styling once per HUD bind and caching stat-widget scale/layout updates.
+- Throttled background menu-install and GameData discovery probe cadence.
+
+### Changed (logging behavior)
+- Main diagnostic console logging is now disabled by default (`SIMPLEHUD_DIAG_LOG=false`, `SIMPLEHUD_MENU_PANEL_DIAG=false`).
+- Warning-level messages for real error paths (invalid JSON, missing scripts, failed writes/loads) remain intact.
+
+### Changed (main-menu vitals controls)
+- Simplified `Transparency` selector to two options only: `Dynamic` and `Static`.
+- Opacity percent input now appears only for `Static` mode.
+- Legacy saved `opaque` mode is mapped to `Static` with `100%` opacity in the UI.
+
+### Fixed
+- Fixed stamina/fatigue threshold mismatch with unified vitals threshold expectations:
+  - updated default/preset stamina+fatigue thresholds from `50` to `79` to match non-health vitals baseline
+  - updated common-threshold UI sync to surface strictest value when mixed legacy thresholds exist
+
 ## [1.0.3] - 2026-04-23
 
 ### Changed (distribution model)

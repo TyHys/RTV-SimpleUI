@@ -117,10 +117,18 @@ Ordering parity:
 ## Feature Notes
 
 - Vitals display modes: numeric or radial
-- Vitals transparency modes: dynamic / static (full) / fixed opacity
+- Vitals transparency modes: dynamic or static (static exposes an opacity percent control)
 - Custom gradient supports high/mid/low RGB thresholds
 - Status tray supports hidden/inflicted/always with active + inactive tint/alpha
 - NoHide presets standardized to always-visible status behavior and explicit inactive styling
+- Stamina/fatigue now use the same 79% visibility-threshold baseline as other non-health vitals (unless user-overridden)
+
+## Runtime Notes
+
+- Preferences reads are cached (no per-frame `Preferences.tres` reloads)
+- Status tray icons are pooled and texture-cached instead of rebuilt each refresh
+- FPS text styling is applied once per HUD bind instead of every update
+- Debug print diagnostics default to off; warnings remain for real failure paths
 
 ## Reference Docs
 

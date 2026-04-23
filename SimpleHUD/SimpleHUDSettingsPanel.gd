@@ -165,7 +165,7 @@ func build(vbox: VBoxContainer) -> void:
 	_vitals_transparency_opt = _add_labeled_option(
 		vbox,
 		"Transparency",
-		["Dynamic", "Static", "Fixed opacity"],
+		["Dynamic", "Static"],
 	)
 	_vitals_transparency_opt.item_selected.connect(_on_vitals_transparency_changed)
 
@@ -663,14 +663,18 @@ func sync_from_main() -> void:
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
 	_vitals_transparency_opt.set_block_signals(true)
 	match vm:
-		"opaque":
-			_vitals_transparency_opt.select(1)
 		"static":
-			_vitals_transparency_opt.select(2)
+			_vitals_transparency_opt.select(1)
+		"opaque":
+			# Legacy mode: treat as static with 100% opacity in the 2-option UI.
+			_vitals_transparency_opt.select(1)
 		_:
 			_vitals_transparency_opt.select(0)
 	_vitals_transparency_opt.set_block_signals(false)
-	_vitals_static_opacity_spin.set_value_no_signal(float(strip.get("vitals_static_opacity_pct", 75.0)))
+	var static_pct := float(strip.get("vitals_static_opacity_pct", 75.0))
+	if vm == "opaque":
+		static_pct = 100.0
+	_vitals_static_opacity_spin.set_value_no_signal(static_pct)
 	_update_vitals_static_opacity_row_visibility()
 
 	if m.has_method(&"get_simplehud_preset_dropdown_index_for_active"):
@@ -818,7 +822,7 @@ func _apply_strip_from_ui() -> void:
 
 func _update_vitals_static_opacity_row_visibility() -> void:
 	if _vitals_static_opacity_row != null:
-		_vitals_static_opacity_row.visible = _vitals_transparency_opt.selected == 2
+		_vitals_static_opacity_row.visible = _vitals_transparency_opt.selected == 1
 
 
 func _on_vitals_transparency_changed(_idx: int) -> void:
@@ -839,8 +843,6 @@ func _push_vitals_transparency_to_main() -> void:
 	var mk := "dynamic"
 	match _vitals_transparency_opt.selected:
 		1:
-			mk = "opaque"
-		2:
 			mk = "static"
 		_:
 			mk = "dynamic"
