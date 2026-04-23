@@ -2,7 +2,7 @@
 
 SimpleHUD is a **HUD framework** for Road to Vostok designed for players who want to customize the core HUD elements using a core set of common tools and configurations.
 
-To demonstrate, this workshop release includes **8 preset variants** (each uploaded as a separate download), built on the same framework core. I have included screenshots which will detail the name of the preset, so that you can review and select a preset.
+This workshop release now ships as **one download** (`SimpleUI.vmz`) with built-in presets and an in-game configuration menu.
 
 ## How The UI Works
 
@@ -10,9 +10,29 @@ SimpleHUD focuses on readable, context-driven information:
 
 - **Unneeded clutter is hidden:** stats and status elements can stay out of view until they matter (based on configured thresholds and status conditions).
 - **Affliction/status icons are context-aware:** by default, only active/afflicted conditions are shown in the status tray.
-- **Transparency scales with urgency:** elements become more visible as values get worse, helping critical info stand out naturally.
+- **Transparency options are flexible:** use dynamic urgency-based fading, static full visibility, or fixed-opacity vitals.
 - **Two stat display styles:** choose either numeric text values or icon-centered radial donut charts (think stamina bars from Breath of the Wild).
-- **NoHide variants available:** these presets keep Health/Energy/Hydration/Mental/Temp/Stamina/Fatigue always visible and disable dynamic stat fading (full visibility at all times).
+- **NoHide-style behavior available:** presets and UI settings support always-visible, high-readability variants.
+
+## In-Game Configuration (Main Menu)
+
+Open the game main menu and click **SimpleHUD**:
+
+- Pick any built-in preset from the preset dropdown
+- See **Current Preset** status (`Preset Name` or `User Customized`)
+- Expand **Customize** and tune:
+  - **Vitals**: edge, order, spacing, thresholds, transparency mode, gradient colors/thresholds
+  - **Ailments**: edge/order, spacing/scale, active+inactive tint, inactive opacity
+
+All changes apply live and are saved per-player.
+
+## Saved Settings
+
+SimpleHUD stores user changes in:
+
+- `user://simplehud_preferences.json`
+
+This is in the game's user-data/appdata location (not in the Steam install directory).
 
 ## Preset Preview Screenshots
 
@@ -25,12 +45,12 @@ SimpleHUD focuses on readable, context-driven information:
 - **TextNumericColorNoHide** [View screenshot](https://i.imgur.com/rUnAw5S.jpeg)
 - **TextNumericPlainNoHide** [View screenshot](https://i.imgur.com/q0LktUb.jpeg)
 
-> **Note:** These are separate downloads for convenience, but functionally the main difference between presets is the values defined in `SimpleHUD/Config.gd`.
-> `NoHide` presets are tuned for always-on, full-opacity stat readability. `Color` presets will gradually change colors to alert the user as the value approaches configurable threshold values.
+> **Note:** These screenshots show style baselines included in the single package.  
+> `NoHide` styles prioritize always-on readability. `Color` styles use configurable threshold-driven color transitions.
 
 ## How To Choose
 
-Please review the **current screenshots** on this workshop page and pick the preset that best fits your readability preference and visual style.
+Start from the preset that looks closest to what you want, then fine-tune inside the SimpleHUD menu.
 
 ## Framework-First Design
 

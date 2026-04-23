@@ -329,7 +329,9 @@ func _try_install_simplehud_main_menu() -> void:
 			var main_blk: Node = sc.get_node_or_null("Main")
 			if main_blk != null:
 				main_blk.hide()
-			if panel_ui.has_method(&"sync_from_main"):
+			if panel_ui.has_method(&"on_menu_opened"):
+				panel_ui.call(&"on_menu_opened")
+			elif panel_ui.has_method(&"sync_from_main"):
 				panel_ui.call(&"sync_from_main")
 			log_menu_panel_diag("button pressed: panel.visible=%s" % panel.visible)
 			if SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG:
@@ -460,8 +462,88 @@ func get_simplehud_active_preset_id() -> String:
 	return str(_cfg.get_meta(&"simplehud_active_preset", ""))
 
 
+func _stable_json(value: Variant) -> String:
+	return JSON.stringify(value, "", true)
+
+
+func _cfg_signature(cfg: RefCounted) -> Dictionary:
+	var vitals: Dictionary = {}
+	for sid in SimpleHUDConfigScript.STAT_IDS:
+		var grad: Dictionary = {}
+		if cfg.stat_gradient_overrides.has(sid):
+			var gv: Variant = cfg.stat_gradient_overrides[sid]
+			if gv is Dictionary:
+				grad = (gv as Dictionary).duplicate(true)
+		vitals[String(sid)] = {
+			"radial": bool(cfg.radial.get(sid, true)),
+			"anchor": str(cfg.get_vitals_anchor(sid)),
+			"padding_px": float(cfg.get_vitals_padding_px(sid)),
+			"spacing_px": float(cfg.get_spacing_after_stat(sid)),
+			"scale_pct": float(cfg.get_vitals_scale_pct(sid)),
+			"visible_threshold_pct": float(cfg.get_threshold(sid)),
+			"gradient": grad,
+		}
+	return {
+		"general": {
+			"numeric_only": bool(cfg.numeric_only),
+			"min_stat_alpha_floor": float(cfg.min_stat_alpha_floor),
+			"vitals_transparency_mode": str(cfg.get_vitals_transparency_mode()),
+			"vitals_static_opacity": float(cfg.vitals_static_opacity),
+			"stamina_fatigue_near_zero_cutoff": float(cfg.stamina_fatigue_near_zero_cutoff),
+		},
+		"vitals_layout": {
+			"spacing_px": float(cfg.vitals_spacing_default_px),
+			"strip_alignment": str(cfg.vitals_strip_alignment),
+		},
+		"vitals": vitals,
+		"status": {
+			"mode": str(cfg.status_mode),
+			"anchor": str(cfg.status_anchor),
+			"padding_px": float(cfg.status_padding_px),
+			"spacing_px": float(cfg.status_spacing_px),
+			"scale_pct": float(cfg.status_scale_pct),
+			"strip_alignment": str(cfg.status_strip_alignment),
+			"stack_direction": str(cfg.status_stack_direction),
+			"inactive_alpha": float(cfg.status_inactive_alpha),
+			"auto_hide_when_none": bool(cfg.status_auto_hide_when_none),
+			"rgb": [int(cfg.status_color_r), int(cfg.status_color_g), int(cfg.status_color_b)],
+			"inactive_rgb": [int(cfg.status_inactive_r), int(cfg.status_inactive_g), int(cfg.status_inactive_b)],
+		},
+		"stat_text_colors": {
+			"mode": str(cfg.stat_text_color_mode),
+			"high_start_pct": float(cfg.stat_text_high_start_pct),
+			"mid_pct": float(cfg.stat_text_mid_pct),
+			"high_rgb": [int(cfg.stat_text_high_r), int(cfg.stat_text_high_g), int(cfg.stat_text_high_b)],
+			"mid_rgb": [int(cfg.stat_text_mid_r), int(cfg.stat_text_mid_g), int(cfg.stat_text_mid_b)],
+			"low_rgb": [int(cfg.stat_text_low_r), int(cfg.stat_text_low_g), int(cfg.stat_text_low_b)],
+		},
+	}
+
+
+func get_simplehud_current_preset_state_for_ui() -> Dictionary:
+	if _cfg == null:
+		return {"id": "", "label": "User Customized", "matched": false}
+	var cur_sig := _stable_json(_cfg_signature(_cfg))
+	for d in SimpleHUDPresetsReg.PRESETS:
+		var pid := str(d.get("id", ""))
+		var ppath := str(d.get("script", ""))
+		if pid == "" || ppath == "":
+			continue
+		var scr: GDScript = load(ppath) as GDScript
+		if scr == null:
+			continue
+		var nu: RefCounted = scr.new() as RefCounted
+		if nu == null || !(nu as Object).has_method(&"apply_full_preset_defaults"):
+			continue
+		(nu as RefCounted).call(&"apply_full_preset_defaults")
+		if _stable_json(_cfg_signature(nu)) == cur_sig:
+			return {"id": pid, "label": str(d.get("label", pid)), "matched": true}
+	return {"id": "", "label": "User Customized", "matched": false}
+
+
 func get_simplehud_preset_dropdown_index_for_active() -> int:
-	var id := get_simplehud_active_preset_id()
+	var st := get_simplehud_current_preset_state_for_ui()
+	var id := str(st.get("id", ""))
 	if id == "":
 		return 0
 	for i in range(SimpleHUDPresetsReg.PRESETS.size()):
@@ -532,6 +614,25 @@ func get_stat_settings_for_ui(stat_id: StringName) -> Dictionary:
 		"gradient_mode": gradient_mode,
 		"gradient": grad_copy,
 	}
+
+
+func get_vitals_common_settings_for_ui() -> Dictionary:
+	var d := get_stat_settings_for_ui(SimpleHUDConfigScript.STAT_HEALTH)
+	var counts: Dictionary = {}
+	for sid in SimpleHUDConfigScript.STAT_IDS:
+		var t := float(_cfg.get_threshold(sid))
+		var key := str(snappedf(t, 0.01))
+		counts[key] = int(counts.get(key, 0)) + 1
+	var best_key := ""
+	var best_count := -1
+	for k in counts.keys():
+		var c := int(counts[k])
+		if c > best_count:
+			best_count = c
+			best_key = str(k)
+	if best_key != "":
+		d["visible_threshold_pct"] = float(best_key)
+	return d
 
 
 func _apply_stat_dict_to_cfg(sid: StringName, stat_dict: Dictionary) -> void:

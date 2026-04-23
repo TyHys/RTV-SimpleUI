@@ -152,7 +152,7 @@ var vitals_padding_px: Dictionary = {} # stat_id -> float
 var vitals_scale_pct: Dictionary = {} # stat_id -> float (100 = default size)
 ## Gap after this stat toward the next widget on the same edge (falls back to vitals_spacing_default_px).
 var vitals_spacing_px: Dictionary = {} # stat_id -> float
-## Per-stat gradient overrides: stat_id -> Dictionary with optional keys mode, high/mid_threshold_pct, high_rgb, mid_rgb, low_rgb (arrays of 3 ints).
+## Per-stat gradient overrides: stat_id -> Dictionary with optional keys mode, high/mid/low_threshold_pct, high_rgb, mid_rgb, low_rgb (arrays of 3 ints).
 var stat_gradient_overrides: Dictionary = {}
 var stat_text_color_mode: String = "gradient" # gradient | white_only
 var stat_text_high_start_pct: float = 75.0
@@ -183,7 +183,8 @@ var stamina_fatigue_near_zero_cutoff: float = 1.0
 var _loaded_user_path: String = ""
 
 func load_all() -> void:
-	apply_defaults()
+	## Use full preset defaults on startup so baked Config.gd preset matches runtime preset application.
+	apply_full_preset_defaults()
 	if LOAD_DEFAULT_INI:
 		_load_file(DEFAULT_RES, false)
 	var user_path := _resolve_user_ini_path()
@@ -449,6 +450,7 @@ func get_stat_text_color(percent: float) -> Color:
 		stat_text_color_mode,
 		stat_text_high_start_pct,
 		stat_text_mid_pct,
+		0.0,
 		Color8(stat_text_high_r, stat_text_high_g, stat_text_high_b, 255),
 		Color8(stat_text_mid_r, stat_text_mid_g, stat_text_mid_b, 255),
 		Color8(stat_text_low_r, stat_text_low_g, stat_text_low_b, 255),
@@ -464,6 +466,7 @@ func get_stat_text_color_for(stat_id: StringName, percent: float) -> Color:
 	var mode := str(gd.get("mode", stat_text_color_mode)).to_lower()
 	var hi_start := float(gd.get("high_threshold_pct", stat_text_high_start_pct))
 	var mid_at := float(gd.get("mid_threshold_pct", stat_text_mid_pct))
+	var low_at := float(gd.get("low_threshold_pct", 0.0))
 
 	var hi_c := Color8(stat_text_high_r, stat_text_high_g, stat_text_high_b, 255)
 	var mid_c := Color8(stat_text_mid_r, stat_text_mid_g, stat_text_mid_b, 255)
@@ -476,7 +479,7 @@ func get_stat_text_color_for(stat_id: StringName, percent: float) -> Color:
 	if gd.has("low_rgb"):
 		low_c = _color_from_rgb_array(gd["low_rgb"], low_c)
 
-	return _stat_color_from_params(percent, mode, hi_start, mid_at, hi_c, mid_c, low_c)
+	return _stat_color_from_params(percent, mode, hi_start, mid_at, low_at, hi_c, mid_c, low_c)
 
 
 func _color_from_rgb_array(v: Variant, fallback: Color) -> Color:
@@ -491,6 +494,7 @@ func _stat_color_from_params(
 	mode: String,
 	hi_start_pct: float,
 	mid_pct: float,
+	low_pct: float,
 	hi: Color,
 	mid: Color,
 	low: Color,
@@ -501,6 +505,7 @@ func _stat_color_from_params(
 	var p := clampf(percent, 0.0, 100.0)
 	var hi_start := clampf(hi_start_pct, 0.0, 100.0)
 	var mid_at := clampf(mid_pct, 0.0, hi_start)
+	var low_at := clampf(low_pct, 0.0, mid_at)
 
 	if p >= hi_start:
 		return hi
@@ -509,7 +514,9 @@ func _stat_color_from_params(
 		var t_hi := (hi_start - p) / den_hi
 		return hi.lerp(mid, clampf(t_hi, 0.0, 1.0))
 
-	var den_low := maxf(0.001, mid_at)
+	if p <= low_at:
+		return low
+	var den_low := maxf(0.001, mid_at - low_at)
 	var t_low := (mid_at - p) / den_low
 	return mid.lerp(low, clampf(t_low, 0.0, 1.0))
 

@@ -291,6 +291,8 @@ static func _merge_one_stat(cfg: RefCounted, sid: StringName, sd: Dictionary) ->
 			entry["high_threshold_pct"] = clampf(float(gd["high_threshold_pct"]), 0.0, 100.0)
 		if gd.has("mid_threshold_pct"):
 			entry["mid_threshold_pct"] = clampf(float(gd["mid_threshold_pct"]), 0.0, 100.0)
+		if gd.has("low_threshold_pct"):
+			entry["low_threshold_pct"] = clampf(float(gd["low_threshold_pct"]), 0.0, 100.0)
 		var hi := _optional_rgb_arr(gd, "high_rgb")
 		var mid := _optional_rgb_arr(gd, "mid_rgb")
 		var lo := _optional_rgb_arr(gd, "low_rgb")

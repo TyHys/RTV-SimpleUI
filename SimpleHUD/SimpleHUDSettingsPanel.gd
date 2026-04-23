@@ -32,7 +32,6 @@ var _vitals_static_opacity_row: Control
 var _stat_mode: OptionButton
 var _stat_anchor: OptionButton
 var _stat_padding: SpinBox
-var _stat_spacing: SpinBox
 var _stat_scale: SpinBox
 var _stat_threshold: SpinBox
 var _grad_mode: OptionButton
@@ -40,6 +39,7 @@ var _grad_custom: VBoxContainer
 
 var _g_hi_pct: SpinBox
 var _g_mid_pct: SpinBox
+var _g_lo_pct: SpinBox
 var _gh_r: SpinBox
 var _gh_g: SpinBox
 var _gh_b: SpinBox
@@ -53,6 +53,18 @@ var _gl_b: SpinBox
 var _ui_sync: bool = false
 
 var _preset_option: OptionButton
+var _current_preset_value: Label
+
+var _customize_toggle_btn: Button
+var _vitals_toggle_btn: Button
+var _ailments_toggle_btn: Button
+var _customize_open: bool = false
+var _vitals_open: bool = false
+var _ailments_open: bool = false
+var _vitals_start_idx: int = -1
+var _vitals_end_idx: int = -1
+var _ailments_start_idx: int = -1
+var _ailments_end_idx: int = -1
 
 
 func _init(menu_root: Control, panel_root: Control) -> void:
@@ -84,13 +96,42 @@ func build(vbox: VBoxContainer) -> void:
 	back.pressed.connect(_on_back_pressed)
 	vbox.add_child(back)
 
+	var cur_row := HBoxContainer.new()
+	cur_row.add_theme_constant_override("separation", 8)
+	var cur_lbl := Label.new()
+	cur_lbl.text = "Current Preset"
+	cur_lbl.custom_minimum_size.x = 120
+	cur_row.add_child(cur_lbl)
+	_current_preset_value = Label.new()
+	_current_preset_value.text = "User Customized"
+	_current_preset_value.add_theme_color_override("font_color", Color8(10, 80, 0, 255))
+	_current_preset_value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cur_row.add_child(_current_preset_value)
+	vbox.add_child(cur_row)
+
+	_customize_toggle_btn = Button.new()
+	_customize_toggle_btn.toggle_mode = true
+	_customize_toggle_btn.button_pressed = _customize_open
+	_customize_toggle_btn.focus_mode = Control.FOCUS_ALL
+	_customize_toggle_btn.pressed.connect(_on_customize_toggled)
+	vbox.add_child(_customize_toggle_btn)
+
+	_vitals_toggle_btn = Button.new()
+	_vitals_toggle_btn.toggle_mode = true
+	_vitals_toggle_btn.button_pressed = _vitals_open
+	_vitals_toggle_btn.focus_mode = Control.FOCUS_ALL
+	_vitals_toggle_btn.pressed.connect(_on_vitals_section_toggled)
+	vbox.add_child(_vitals_toggle_btn)
+
+	_vitals_start_idx = vbox.get_child_count()
+
 	var vt := Label.new()
 	vt.text = "Vitals"
 	vt.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(vt)
 
-	_spacing_spin = _add_labeled_spin(vbox, "Spacing between vitals", 0, 256, 1, 0)
-	_spacing_spin.value_changed.connect(_on_spacing_strip_changed)
+	_stat_threshold = _add_labeled_spin(vbox, "Minimum display threshold", 0, 101, 1, 0)
+	_stat_threshold.value_changed.connect(_on_stat_field_changed_val)
 
 	_vitals_strip_align_opt = _add_labeled_option(
 		vbox,
@@ -116,17 +157,15 @@ func build(vbox: VBoxContainer) -> void:
 
 	_stat_padding = _add_labeled_spin(vbox, "Edge Padding (px)", 0, 512, 1, 0)
 	_stat_padding.value_changed.connect(_on_stat_field_changed_val)
-	_stat_spacing = _add_labeled_spin(vbox, "Spacing to next vital", 0, 256, 1, 0)
-	_stat_spacing.value_changed.connect(_on_stat_field_changed_val)
+	_spacing_spin = _add_labeled_spin(vbox, "Spacing between vitals", 0, 256, 1, 0)
+	_spacing_spin.value_changed.connect(_on_spacing_strip_changed)
 	_stat_scale = _add_labeled_spin(vbox, "Scale (%)", 25, 400, 5, 0)
 	_stat_scale.value_changed.connect(_on_stat_field_changed_val)
-	_stat_threshold = _add_labeled_spin(vbox, "Minimum display threshold", 0, 101, 1, 0)
-	_stat_threshold.value_changed.connect(_on_stat_field_changed_val)
 
 	_vitals_transparency_opt = _add_labeled_option(
 		vbox,
 		"Transparency",
-		["Dynamic", "Solid", "Fixed opacity"],
+		["Dynamic", "Static", "Fixed opacity"],
 	)
 	_vitals_transparency_opt.item_selected.connect(_on_vitals_transparency_changed)
 
@@ -159,11 +198,6 @@ func build(vbox: VBoxContainer) -> void:
 	_grad_custom.add_theme_constant_override("separation", 6)
 	vbox.add_child(_grad_custom)
 
-	_g_hi_pct = _add_labeled_spin(_grad_custom, "High color from this % of value upward", 0, 100, 1, 0)
-	_g_hi_pct.value_changed.connect(_on_stat_field_changed_val)
-	_g_mid_pct = _add_labeled_spin(_grad_custom, "Blend mid color near this % of value", 0, 100, 1, 0)
-	_g_mid_pct.value_changed.connect(_on_stat_field_changed_val)
-
 	var hi_rgb := Label.new()
 	hi_rgb.text = "High RGB"
 	hi_rgb.add_theme_font_size_override("font_size", 12)
@@ -176,6 +210,19 @@ func build(vbox: VBoxContainer) -> void:
 	_gh_r.value_changed.connect(_on_stat_field_changed_val)
 	_gh_g.value_changed.connect(_on_stat_field_changed_val)
 	_gh_b.value_changed.connect(_on_stat_field_changed_val)
+	var hi_th_lbl := Label.new()
+	hi_th_lbl.text = "Threshold"
+	hi_th_lbl.custom_minimum_size.x = 70
+	row_hi.add_child(hi_th_lbl)
+	_g_hi_pct = SpinBox.new()
+	_g_hi_pct.min_value = 0
+	_g_hi_pct.max_value = 100
+	_g_hi_pct.step = 1
+	_g_hi_pct.rounded = true
+	_g_hi_pct.custom_minimum_size.x = 72
+	_g_hi_pct.focus_mode = Control.FOCUS_ALL
+	_g_hi_pct.value_changed.connect(_on_stat_field_changed_val)
+	row_hi.add_child(_g_hi_pct)
 	_grad_custom.add_child(row_hi)
 
 	var mid_rgb := Label.new()
@@ -190,6 +237,19 @@ func build(vbox: VBoxContainer) -> void:
 	_gm_r.value_changed.connect(_on_stat_field_changed_val)
 	_gm_g.value_changed.connect(_on_stat_field_changed_val)
 	_gm_b.value_changed.connect(_on_stat_field_changed_val)
+	var mid_th_lbl := Label.new()
+	mid_th_lbl.text = "Threshold"
+	mid_th_lbl.custom_minimum_size.x = 70
+	row_mid.add_child(mid_th_lbl)
+	_g_mid_pct = SpinBox.new()
+	_g_mid_pct.min_value = 0
+	_g_mid_pct.max_value = 100
+	_g_mid_pct.step = 1
+	_g_mid_pct.rounded = true
+	_g_mid_pct.custom_minimum_size.x = 72
+	_g_mid_pct.focus_mode = Control.FOCUS_ALL
+	_g_mid_pct.value_changed.connect(_on_stat_field_changed_val)
+	row_mid.add_child(_g_mid_pct)
 	_grad_custom.add_child(row_mid)
 
 	var low_rgb := Label.new()
@@ -204,9 +264,31 @@ func build(vbox: VBoxContainer) -> void:
 	_gl_r.value_changed.connect(_on_stat_field_changed_val)
 	_gl_g.value_changed.connect(_on_stat_field_changed_val)
 	_gl_b.value_changed.connect(_on_stat_field_changed_val)
+	var low_th_lbl := Label.new()
+	low_th_lbl.text = "Threshold"
+	low_th_lbl.custom_minimum_size.x = 70
+	row_lo.add_child(low_th_lbl)
+	_g_lo_pct = SpinBox.new()
+	_g_lo_pct.min_value = 0
+	_g_lo_pct.max_value = 100
+	_g_lo_pct.step = 1
+	_g_lo_pct.rounded = true
+	_g_lo_pct.custom_minimum_size.x = 72
+	_g_lo_pct.focus_mode = Control.FOCUS_ALL
+	_g_lo_pct.value_changed.connect(_on_stat_field_changed_val)
+	row_lo.add_child(_g_lo_pct)
 	_grad_custom.add_child(row_lo)
+	_vitals_end_idx = vbox.get_child_count() - 1
+
+	_ailments_toggle_btn = Button.new()
+	_ailments_toggle_btn.toggle_mode = true
+	_ailments_toggle_btn.button_pressed = _ailments_open
+	_ailments_toggle_btn.focus_mode = Control.FOCUS_ALL
+	_ailments_toggle_btn.pressed.connect(_on_ailments_section_toggled)
+	vbox.add_child(_ailments_toggle_btn)
 
 	vbox.add_child(HSeparator.new())
+	_ailments_start_idx = vbox.get_child_count()
 
 	var title := Label.new()
 	title.text = "Ailment icons"
@@ -290,9 +372,65 @@ func build(vbox: VBoxContainer) -> void:
 
 	_inactive_alpha_spin = _add_labeled_spin(vbox, "Inactive ailment opacity (%)", 0, 100, 1, 0)
 	_inactive_alpha_spin.value_changed.connect(_on_status_numeric_field_changed)
+	_ailments_end_idx = vbox.get_child_count() - 1
 
 	sync_from_main()
+	_refresh_expandable_state()
 	_panel_menu_log("SettingsPanel.build() end vbox_children=%d" % vbox.get_child_count())
+
+
+func _set_vbox_children_visible(vbox: VBoxContainer, start_idx: int, end_idx: int, visible: bool) -> void:
+	if vbox == null:
+		return
+	if start_idx < 0 || end_idx < start_idx:
+		return
+	var last := mini(end_idx, vbox.get_child_count() - 1)
+	for i in range(start_idx, last + 1):
+		var n := vbox.get_child(i)
+		if n is CanvasItem:
+			(n as CanvasItem).visible = visible
+
+
+func _refresh_expandable_state() -> void:
+	var root := _current_content_vbox()
+	if root == null:
+		return
+	if _customize_toggle_btn != null:
+		_customize_toggle_btn.text = "Customize %s" % ("▼" if _customize_open else "▶")
+		_customize_toggle_btn.button_pressed = _customize_open
+	if _vitals_toggle_btn != null:
+		_vitals_toggle_btn.visible = _customize_open
+		_vitals_toggle_btn.text = "Vitals %s" % ("▼" if _vitals_open else "▶")
+		_vitals_toggle_btn.button_pressed = _vitals_open
+	if _ailments_toggle_btn != null:
+		_ailments_toggle_btn.visible = _customize_open
+		_ailments_toggle_btn.text = "Ailments %s" % ("▼" if _ailments_open else "▶")
+		_ailments_toggle_btn.button_pressed = _ailments_open
+	_set_vbox_children_visible(root, _vitals_start_idx, _vitals_end_idx, _customize_open && _vitals_open)
+	_set_vbox_children_visible(root, _ailments_start_idx, _ailments_end_idx, _customize_open && _ailments_open)
+
+
+func _current_content_vbox() -> VBoxContainer:
+	if _preset_option != null:
+		var p := _preset_option.get_parent()
+		if p != null:
+			return p.get_parent() as VBoxContainer
+	return null
+
+
+func _on_customize_toggled() -> void:
+	_customize_open = _customize_toggle_btn.button_pressed if _customize_toggle_btn != null else _customize_open
+	_refresh_expandable_state()
+
+
+func _on_vitals_section_toggled() -> void:
+	_vitals_open = _vitals_toggle_btn.button_pressed if _vitals_toggle_btn != null else _vitals_open
+	_refresh_expandable_state()
+
+
+func _on_ailments_section_toggled() -> void:
+	_ailments_open = _ailments_toggle_btn.button_pressed if _ailments_toggle_btn != null else _ailments_open
+	_refresh_expandable_state()
 
 
 func _panel_menu_log(msg: String) -> void:
@@ -313,6 +451,14 @@ func _on_back_pressed() -> void:
 		main_blk = _menu_root.get_node_or_null("Main")
 	if main_blk != null:
 		main_blk.show()
+
+
+func on_menu_opened() -> void:
+	_customize_open = false
+	_vitals_open = false
+	_ailments_open = false
+	_refresh_expandable_state()
+	sync_from_main()
 
 
 func _add_labeled_option(parent: Control, label_text: String, items: Array) -> OptionButton:
@@ -493,6 +639,8 @@ func sync_from_main() -> void:
 		_ui_sync = false
 		return
 
+	_refresh_current_preset_label()
+
 	var sd: Dictionary = m.get_status_tray_settings_for_ui()
 	_auto_hide_cb.set_pressed_no_signal(bool(sd.get("auto_hide", false)))
 	_anchor_option.select(_anchor_index_from_key(str(sd.get("anchor", "right"))))
@@ -532,6 +680,16 @@ func sync_from_main() -> void:
 
 	_sync_stat_editor_panel()
 	_ui_sync = false
+	_refresh_expandable_state()
+
+
+func _refresh_current_preset_label() -> void:
+	var m := _simplehud_main()
+	if _current_preset_value == null || m == null:
+		return
+	if m.has_method(&"get_simplehud_current_preset_state_for_ui"):
+		var st: Dictionary = (m as Node).call(&"get_simplehud_current_preset_state_for_ui")
+		_current_preset_value.text = str(st.get("label", "User Customized"))
 
 
 func _sync_stat_editor_panel() -> void:
@@ -539,7 +697,11 @@ func _sync_stat_editor_panel() -> void:
 	if m == null:
 		return
 
-	var d: Dictionary = m.get_stat_settings_for_ui(CFG.STAT_HEALTH)
+	var d: Dictionary = {}
+	if m.has_method(&"get_vitals_common_settings_for_ui"):
+		d = (m as Node).call(&"get_vitals_common_settings_for_ui")
+	else:
+		d = m.get_stat_settings_for_ui(CFG.STAT_HEALTH)
 	var num_only := bool(d.get("numeric_only_global", false))
 
 	_stat_mode.set_item_disabled(1, num_only)
@@ -552,7 +714,6 @@ func _sync_stat_editor_panel() -> void:
 	_stat_anchor.select(_anchor_index_from_key(str(d.get("anchor", "bottom"))))
 	_refresh_vitals_order_option_items(_vitals_strip_align_key_from_sel(_vitals_strip_align_opt.selected))
 	_stat_padding.set_value_no_signal(float(d.get("padding_px", 8.0)))
-	_stat_spacing.set_value_no_signal(float(d.get("spacing_px", 12.0)))
 	_stat_scale.set_value_no_signal(float(d.get("scale_pct", 100.0)))
 	_stat_threshold.set_value_no_signal(float(d.get("visible_threshold_pct", 79.0)))
 
@@ -571,6 +732,7 @@ func _sync_stat_editor_panel() -> void:
 
 	_g_hi_pct.set_value_no_signal(float(gd.get("high_threshold_pct", 75.0)))
 	_g_mid_pct.set_value_no_signal(float(gd.get("mid_threshold_pct", 50.0)))
+	_g_lo_pct.set_value_no_signal(float(gd.get("low_threshold_pct", 0.0)))
 
 	var hir: Array = gd.get("high_rgb", [255, 255, 255])
 	var mir: Array = gd.get("mid_rgb", [190, 190, 15])
@@ -634,6 +796,7 @@ func _apply_status_from_ui() -> void:
 		int(_ig_spin.value),
 		int(_ib_spin.value),
 	)
+	_refresh_current_preset_label()
 
 
 func _on_status_numeric_field_changed(_v: float) -> void:
@@ -650,6 +813,7 @@ func _apply_strip_from_ui() -> void:
 		float(_spacing_spin.value),
 		_vitals_strip_align_key_from_sel(_vitals_strip_align_opt.selected),
 	)
+	_refresh_current_preset_label()
 
 
 func _update_vitals_static_opacity_row_visibility() -> void:
@@ -681,6 +845,7 @@ func _push_vitals_transparency_to_main() -> void:
 		_:
 			mk = "dynamic"
 	(mm as Node).call(&"apply_vitals_transparency_from_ui", mk, float(_vitals_static_opacity_spin.value))
+	_refresh_current_preset_label()
 
 
 func _build_gradient_dict_for_custom() -> Dictionary:
@@ -688,6 +853,7 @@ func _build_gradient_dict_for_custom() -> Dictionary:
 		"mode": "gradient",
 		"high_threshold_pct": float(_g_hi_pct.value),
 		"mid_threshold_pct": float(_g_mid_pct.value),
+		"low_threshold_pct": float(_g_lo_pct.value),
 		"high_rgb": [int(_gh_r.value), int(_gh_g.value), int(_gh_b.value)],
 		"mid_rgb": [int(_gm_r.value), int(_gm_g.value), int(_gm_b.value)],
 		"low_rgb": [int(_gl_r.value), int(_gl_g.value), int(_gl_b.value)],
@@ -714,7 +880,6 @@ func _apply_stat_from_ui() -> void:
 		"radial": radial,
 		"anchor": _anchor_key_from_index(_stat_anchor.selected),
 		"padding_px": float(_stat_padding.value),
-		"spacing_px": float(_stat_spacing.value),
 		"scale_pct": float(_stat_scale.value),
 		"visible_threshold_pct": float(_stat_threshold.value),
 		"gradient_mode": gmode,
@@ -723,6 +888,7 @@ func _apply_stat_from_ui() -> void:
 		stat_dict["gradient"] = _build_gradient_dict_for_custom()
 
 	mm.apply_stat_settings_to_all_from_ui(stat_dict)
+	_refresh_current_preset_label()
 
 
 func _on_auto_hide_toggled(_on: bool) -> void:

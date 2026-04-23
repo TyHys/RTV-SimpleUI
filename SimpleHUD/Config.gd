@@ -7,5 +7,4 @@ extends "res://SimpleHUD/SimpleHUDConfigCore.gd"
 ## - `./build_simplehud_vmz.sh` can overwrite **this file only** with `presets/<Preset>/Config.gd`,
 ##   injecting a visual preset (subclass of the core) without touching the core implementation.
 ##
-## Players should not edit GDScript; use `user://simplehud_preferences.json` (see
-## `simplehud_preferences.example.json`; full merge schema in `UserPreferences.gd`).
+## Players should not edit GDScript; use the in-game SimpleHUD main-menu panel for customization.
