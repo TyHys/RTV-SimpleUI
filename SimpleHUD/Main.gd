@@ -479,6 +479,14 @@ func get_misc_settings_for_ui() -> Dictionary:
 		"compass_r": int(_cfg.compass_color_r),
 		"compass_g": int(_cfg.compass_color_g),
 		"compass_b": int(_cfg.compass_color_b),
+		"crosshair_enabled": bool(_cfg.crosshair_enabled),
+		"crosshair_alpha_pct": clampf(float(_cfg.crosshair_color_a), 0.0, 1.0) * 100.0,
+		"crosshair_r": int(_cfg.crosshair_color_r),
+		"crosshair_g": int(_cfg.crosshair_color_g),
+		"crosshair_b": int(_cfg.crosshair_color_b),
+		"crosshair_shape": str(_cfg.crosshair_shape),
+		"crosshair_scale_pct": float(_cfg.crosshair_scale_pct),
+		"crosshair_bloom_enabled": bool(_cfg.crosshair_bloom_enabled),
 	}
 
 
@@ -489,6 +497,14 @@ func apply_misc_settings_from_ui(
 	compass_r: int,
 	compass_g: int,
 	compass_b: int,
+	crosshair_enabled: bool,
+	crosshair_alpha_pct: float,
+	crosshair_r: int,
+	crosshair_g: int,
+	crosshair_b: int,
+	crosshair_shape: String,
+	crosshair_scale_pct: float,
+	crosshair_bloom_enabled: bool,
 ) -> void:
 	_cfg.compass_enabled = compass_enabled
 	_cfg.compass_anchor = "bottom" if str(compass_anchor).to_lower() == "bottom" else "top"
@@ -496,6 +512,15 @@ func apply_misc_settings_from_ui(
 	_cfg.compass_color_r = clampi(compass_r, 0, 255)
 	_cfg.compass_color_g = clampi(compass_g, 0, 255)
 	_cfg.compass_color_b = clampi(compass_b, 0, 255)
+	_cfg.crosshair_enabled = crosshair_enabled
+	_cfg.crosshair_color_a = clampf(float(crosshair_alpha_pct) / 100.0, 0.0, 1.0)
+	_cfg.crosshair_color_r = clampi(crosshair_r, 0, 255)
+	_cfg.crosshair_color_g = clampi(crosshair_g, 0, 255)
+	_cfg.crosshair_color_b = clampi(crosshair_b, 0, 255)
+	var sh := str(crosshair_shape).to_lower()
+	_cfg.crosshair_shape = "dot" if sh == "dot" else "crosshair"
+	_cfg.crosshair_scale_pct = clampf(crosshair_scale_pct, 25.0, 300.0)
+	_cfg.crosshair_bloom_enabled = crosshair_bloom_enabled
 	UserPreferencesScript.persist_preferences_json(_cfg)
 	refresh_hud_layout()
 
@@ -560,6 +585,12 @@ func _cfg_signature(cfg: RefCounted) -> Dictionary:
 			"compass_anchor": str(cfg.compass_anchor),
 			"compass_alpha": float(cfg.compass_color_a),
 			"compass_rgb": [int(cfg.compass_color_r), int(cfg.compass_color_g), int(cfg.compass_color_b)],
+			"crosshair_enabled": bool(cfg.crosshair_enabled),
+			"crosshair_alpha": float(cfg.crosshair_color_a),
+			"crosshair_rgb": [int(cfg.crosshair_color_r), int(cfg.crosshair_color_g), int(cfg.crosshair_color_b)],
+			"crosshair_shape": str(cfg.crosshair_shape),
+			"crosshair_scale_pct": float(cfg.crosshair_scale_pct),
+			"crosshair_bloom_enabled": bool(cfg.crosshair_bloom_enabled),
 		},
 		"stat_text_colors": {
 			"mode": str(cfg.stat_text_color_mode),

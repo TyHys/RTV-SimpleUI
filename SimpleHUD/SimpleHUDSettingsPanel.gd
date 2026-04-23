@@ -33,6 +33,20 @@ var _compass_g_spin: SpinBox
 var _compass_b_spin: SpinBox
 var _compass_rgb_title: Label
 var _compass_rgb_row: Control
+var _crosshair_enable_cb: CheckBox
+var _crosshair_shape_opt: OptionButton
+var _crosshair_shape_row: Control
+var _crosshair_alpha_spin: SpinBox
+var _crosshair_alpha_row: Control
+var _crosshair_scale_spin: SpinBox
+var _crosshair_scale_row: Control
+var _crosshair_bloom_cb: CheckBox
+var _crosshair_bloom_row: Control
+var _crosshair_rgb_title: Label
+var _crosshair_rgb_row: Control
+var _crosshair_r_spin: SpinBox
+var _crosshair_g_spin: SpinBox
+var _crosshair_b_spin: SpinBox
 
 var _spacing_spin: SpinBox
 var _vitals_strip_align_opt: OptionButton
@@ -458,6 +472,61 @@ func build(vbox: VBoxContainer) -> void:
 	_compass_b_spin.value_changed.connect(_on_misc_field_changed)
 	vbox.add_child(comp_rgb_row)
 	_compass_rgb_row = comp_rgb_row
+
+	vbox.add_child(HSeparator.new())
+
+	_crosshair_enable_cb = CheckBox.new()
+	_crosshair_enable_cb.text = "Enable Dynamic Crosshair"
+	_crosshair_enable_cb.focus_mode = Control.FOCUS_NONE
+	_crosshair_enable_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_crosshair_enable_cb)
+
+	var xr_shape_row := HBoxContainer.new()
+	xr_shape_row.add_theme_constant_override("separation", 8)
+	var xr_shape_lbl := Label.new()
+	xr_shape_lbl.text = "Shape"
+	xr_shape_lbl.custom_minimum_size.x = 160
+	xr_shape_row.add_child(xr_shape_lbl)
+	_crosshair_shape_opt = OptionButton.new()
+	_crosshair_shape_opt.focus_mode = Control.FOCUS_ALL
+	_crosshair_shape_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_crosshair_shape_opt.add_item("Crosshair")
+	_crosshair_shape_opt.add_item("Dot")
+	_crosshair_shape_opt.item_selected.connect(_on_misc_field_changed_idx)
+	xr_shape_row.add_child(_crosshair_shape_opt)
+	vbox.add_child(xr_shape_row)
+	_crosshair_shape_row = xr_shape_row
+
+	_crosshair_alpha_spin = _add_labeled_spin(vbox, "Transparency (%)", 0, 100, 1, 0)
+	_crosshair_alpha_spin.value_changed.connect(_on_misc_field_changed)
+	_crosshair_alpha_row = _crosshair_alpha_spin.get_parent()
+
+	_crosshair_scale_spin = _add_labeled_spin(vbox, "Scale (%)", 25, 300, 5, 0)
+	_crosshair_scale_spin.value_changed.connect(_on_misc_field_changed)
+	_crosshair_scale_row = _crosshair_scale_spin.get_parent()
+
+	_crosshair_bloom_cb = CheckBox.new()
+	_crosshair_bloom_cb.text = "Bloom (dynamic spread expansion)"
+	_crosshair_bloom_cb.focus_mode = Control.FOCUS_NONE
+	_crosshair_bloom_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_crosshair_bloom_cb)
+	_crosshair_bloom_row = _crosshair_bloom_cb
+
+	_crosshair_rgb_title = Label.new()
+	_crosshair_rgb_title.text = "Crosshair color (RGB)"
+	_crosshair_rgb_title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(_crosshair_rgb_title)
+
+	var xr_rgb_row := HBoxContainer.new()
+	xr_rgb_row.add_theme_constant_override("separation", 8)
+	_crosshair_r_spin = _mini_spin(xr_rgb_row, "R", 0, 255)
+	_crosshair_g_spin = _mini_spin(xr_rgb_row, "G", 0, 255)
+	_crosshair_b_spin = _mini_spin(xr_rgb_row, "B", 0, 255)
+	_crosshair_r_spin.value_changed.connect(_on_misc_field_changed)
+	_crosshair_g_spin.value_changed.connect(_on_misc_field_changed)
+	_crosshair_b_spin.value_changed.connect(_on_misc_field_changed)
+	vbox.add_child(xr_rgb_row)
+	_crosshair_rgb_row = xr_rgb_row
 	_misc_end_idx = vbox.get_child_count() - 1
 
 	sync_from_main()
@@ -767,6 +836,14 @@ func sync_from_main() -> void:
 		_compass_r_spin.set_value_no_signal(float(misc.get("compass_r", 220)))
 		_compass_g_spin.set_value_no_signal(float(misc.get("compass_g", 220)))
 		_compass_b_spin.set_value_no_signal(float(misc.get("compass_b", 220)))
+		_crosshair_enable_cb.set_pressed_no_signal(bool(misc.get("crosshair_enabled", false)))
+		_crosshair_shape_opt.select(1 if str(misc.get("crosshair_shape", "crosshair")).to_lower() == "dot" else 0)
+		_crosshair_alpha_spin.set_value_no_signal(float(misc.get("crosshair_alpha_pct", 95.0)))
+		_crosshair_scale_spin.set_value_no_signal(float(misc.get("crosshair_scale_pct", 100.0)))
+		_crosshair_bloom_cb.set_pressed_no_signal(bool(misc.get("crosshair_bloom_enabled", true)))
+		_crosshair_r_spin.set_value_no_signal(float(misc.get("crosshair_r", 220)))
+		_crosshair_g_spin.set_value_no_signal(float(misc.get("crosshair_g", 220)))
+		_crosshair_b_spin.set_value_no_signal(float(misc.get("crosshair_b", 220)))
 	_update_misc_compass_rows_visibility()
 
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
@@ -944,7 +1021,15 @@ func _apply_misc_from_ui() -> void:
 		float(_compass_alpha_spin.value),
 		int(_compass_r_spin.value),
 		int(_compass_g_spin.value),
-		int(_compass_b_spin.value)
+		int(_compass_b_spin.value),
+		_crosshair_enable_cb.button_pressed,
+		float(_crosshair_alpha_spin.value),
+		int(_crosshair_r_spin.value),
+		int(_crosshair_g_spin.value),
+		int(_crosshair_b_spin.value),
+		"dot" if _crosshair_shape_opt.selected == 1 else "crosshair",
+		float(_crosshair_scale_spin.value),
+		_crosshair_bloom_cb.button_pressed
 	)
 	_refresh_current_preset_label()
 
@@ -959,6 +1044,19 @@ func _update_misc_compass_rows_visibility() -> void:
 		_compass_rgb_title.visible = show_extra
 	if _compass_rgb_row != null:
 		(_compass_rgb_row as CanvasItem).visible = show_extra
+	var show_crosshair: bool = _crosshair_enable_cb != null && _crosshair_enable_cb.button_pressed
+	if _crosshair_shape_row != null:
+		(_crosshair_shape_row as CanvasItem).visible = show_crosshair
+	if _crosshair_alpha_row != null:
+		(_crosshair_alpha_row as CanvasItem).visible = show_crosshair
+	if _crosshair_scale_row != null:
+		(_crosshair_scale_row as CanvasItem).visible = show_crosshair
+	if _crosshair_bloom_row != null:
+		(_crosshair_bloom_row as CanvasItem).visible = show_crosshair
+	if _crosshair_rgb_title != null:
+		_crosshair_rgb_title.visible = show_crosshair
+	if _crosshair_rgb_row != null:
+		(_crosshair_rgb_row as CanvasItem).visible = show_crosshair
 
 
 func _update_vitals_static_opacity_row_visibility() -> void:

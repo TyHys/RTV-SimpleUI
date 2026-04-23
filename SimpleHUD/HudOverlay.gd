@@ -4,6 +4,7 @@ const SimpleHUDConfigScript := preload("res://SimpleHUD/Config.gd")
 const STAT_WIDGET_SCRIPT := preload("res://SimpleHUD/widgets/StatWidget.gd")
 const STATUS_TRAY_SCRIPT := preload("res://SimpleHUD/widgets/StatusTray.gd")
 const COMPASS_STRIP_SCRIPT := preload("res://SimpleHUD/widgets/CompassStrip.gd")
+const CROSSHAIR_WIDGET_SCRIPT := preload("res://SimpleHUD/widgets/CrosshairWidget.gd")
 
 var _game_data: Resource
 var _cfg: RefCounted
@@ -13,6 +14,8 @@ var _widgets: Dictionary = {}
 
 var _tray: STATUS_TRAY_SCRIPT
 var _compass: Control
+var _crosshair: Control
+var _crosshair_bloom_px: float = 0.0
 
 ## Mirrors escape-menu → Settings HUD toggles (Preferences.vitals / Preferences.medical).
 var _prefs_vitals: bool = true
@@ -61,6 +64,10 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_compass.setup(cfg)
 	add_child(_compass)
 
+	_crosshair = CROSSHAIR_WIDGET_SCRIPT.new()
+	_crosshair.setup(cfg)
+	add_child(_crosshair)
+
 
 ## After swapping the Config instance on Main (e.g. main-menu preset load), rebind widgets and tray to the new object.
 func apply_live_config(cfg: RefCounted) -> void:
@@ -79,6 +86,8 @@ func apply_live_config(cfg: RefCounted) -> void:
 		_tray.rebuild_from_cfg()
 	if _compass != null && (_compass as Object).has_method(&"setup"):
 		(_compass as Node).call(&"setup", cfg)
+	if _crosshair != null && (_crosshair as Object).has_method(&"setup"):
+		(_crosshair as Node).call(&"setup", cfg)
 
 
 func configure_hud_prefs(vitals_on: bool, medical_on: bool) -> void:
@@ -127,6 +136,8 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 		_layout_status_tray(vp_size)
 	if _compass != null:
 		_layout_compass(vp_size, stats_visible)
+	if _crosshair != null:
+		_layout_crosshair(vp_size, stats_visible)
 
 
 func _layout_vitals(vp: Vector2) -> void:
@@ -432,11 +443,28 @@ func _layout_compass(vp: Vector2, stats_visible: bool) -> void:
 	_compass.size = compass_size
 
 
+func _layout_crosshair(vp: Vector2, stats_visible: bool) -> void:
+	if _crosshair == null:
+		return
+	var show_crosshair: bool = bool(_cfg.crosshair_enabled) && bool(stats_visible) && bool(_cfg.enabled)
+	_crosshair.visible = show_crosshair
+	if !show_crosshair:
+		return
+	var xsz: Vector2 = _crosshair.get_combined_minimum_size()
+	if xsz.x <= 1.0 || xsz.y <= 1.0:
+		xsz = Vector2(96.0, 96.0)
+	var x := (vp.x - xsz.x) * 0.5
+	var y := (vp.y - xsz.y) * 0.5
+	_crosshair.position = Vector2(x, y)
+	_crosshair.size = xsz
+
+
 ## `skip_prefs_guard`: when true, refresh widgets even if escape-menu HUD has vitals disabled — used after inventory panel edits so the overlay matches saved cfg.
 func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false) -> void:
 	if !_cfg.enabled || !is_instance_valid(_game_data):
 		return
 	_tick_compass()
+	_tick_crosshair(delta_sec)
 	if !skip_prefs_guard && !_prefs_vitals:
 		return
 
@@ -474,6 +502,70 @@ func _tick_compass() -> void:
 		return
 	var bearing := _bearing_from_game_data()
 	(_compass as Node).call(&"set_bearing_degrees", bearing)
+
+
+func _tick_crosshair(delta_sec: float) -> void:
+	if _crosshair == null || !bool(_cfg.crosshair_enabled):
+		return
+	var dt: float = delta_sec
+	if dt < 0.0:
+		dt = 1.0 / 60.0
+	var target_px: float = 0.0
+	if bool(_cfg.crosshair_bloom_enabled):
+		target_px = _estimate_bloom_radius_px()
+	# Responsive but smooth.
+	var t := clampf(dt * 14.0, 0.0, 1.0)
+	_crosshair_bloom_px = lerpf(_crosshair_bloom_px, target_px, t)
+	if (_crosshair as Object).has_method(&"set_bloom_radius_px"):
+		(_crosshair as Node).call(&"set_bloom_radius_px", _crosshair_bloom_px)
+
+
+func _estimate_bloom_radius_px() -> float:
+	var spread_deg := _read_runtime_spread_degrees()
+	if spread_deg < 0.0:
+		spread_deg = _heuristic_spread_degrees()
+	var scale_mul := clampf(float(_cfg.crosshair_scale_pct) / 100.0, 0.25, 3.0)
+	# 1.0 degree maps to 18 px at 100% scale.
+	return clampf(spread_deg * 18.0 * scale_mul, 0.0, 56.0 * scale_mul)
+
+
+func _read_runtime_spread_degrees() -> float:
+	if _game_data == null || !is_instance_valid(_game_data):
+		return -1.0
+	for key in [
+		"weaponSpread",
+		"spread",
+		"bulletSpread",
+		"hipSpread",
+		"crosshairSpread",
+		"currentSpread",
+	]:
+		var v: Variant = _game_data.get(key)
+		if v != null:
+			var f := float(v)
+			if f >= 0.0:
+				return f
+	return -1.0
+
+
+func _heuristic_spread_degrees() -> float:
+	if _game_data == null || !is_instance_valid(_game_data):
+		return 0.35
+	var s: float = 0.35
+	if bool(_game_data.get("isAiming")) || bool(_game_data.get("isScoped")):
+		s = 0.12
+	if bool(_game_data.get("isRunning")):
+		s += 0.85
+	elif bool(_game_data.get("isMoving")):
+		s += 0.35
+	if bool(_game_data.get("isCrouching")):
+		s = maxf(0.06, s - 0.10)
+	var weapon_pos: int = int(_game_data.get("weaponPosition"))
+	if weapon_pos != 2:
+		s += 0.25
+	if bool(_game_data.get("isFiring")):
+		s += 0.30
+	return clampf(s, 0.02, 2.5)
 
 
 func _bearing_from_game_data() -> float:

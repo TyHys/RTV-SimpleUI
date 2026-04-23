@@ -137,6 +137,15 @@ var compass_color_r: int = 220
 var compass_color_g: int = 220
 var compass_color_b: int = 220
 var compass_color_a: float = 0.95
+var crosshair_enabled: bool = false
+var crosshair_color_r: int = 220
+var crosshair_color_g: int = 220
+var crosshair_color_b: int = 220
+var crosshair_color_a: float = 0.95
+## "crosshair" | "dot"
+var crosshair_shape: String = "crosshair"
+var crosshair_scale_pct: float = 100.0
+var crosshair_bloom_enabled: bool = true
 
 var fps_map_alpha: float = 0.5
 var fps_map_scale: float = 0.81
@@ -305,6 +314,23 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			compass_color_b = clampi(int(cf.get_value("misc", "compass_color_b")), 0, 255)
 		if cf.has_section_key("misc", "compass_color_a"):
 			compass_color_a = clampf(float(cf.get_value("misc", "compass_color_a")), 0.0, 1.0)
+		if cf.has_section_key("misc", "crosshair_enabled"):
+			crosshair_enabled = bool(cf.get_value("misc", "crosshair_enabled"))
+		if cf.has_section_key("misc", "crosshair_color_r"):
+			crosshair_color_r = clampi(int(cf.get_value("misc", "crosshair_color_r")), 0, 255)
+		if cf.has_section_key("misc", "crosshair_color_g"):
+			crosshair_color_g = clampi(int(cf.get_value("misc", "crosshair_color_g")), 0, 255)
+		if cf.has_section_key("misc", "crosshair_color_b"):
+			crosshair_color_b = clampi(int(cf.get_value("misc", "crosshair_color_b")), 0, 255)
+		if cf.has_section_key("misc", "crosshair_color_a"):
+			crosshair_color_a = clampf(float(cf.get_value("misc", "crosshair_color_a")), 0.0, 1.0)
+		if cf.has_section_key("misc", "crosshair_shape"):
+			var sh := str(cf.get_value("misc", "crosshair_shape")).strip_edges().to_lower()
+			crosshair_shape = "dot" if sh == "dot" else "crosshair"
+		if cf.has_section_key("misc", "crosshair_scale_pct"):
+			crosshair_scale_pct = clampf(float(cf.get_value("misc", "crosshair_scale_pct")), 25.0, 300.0)
+		if cf.has_section_key("misc", "crosshair_bloom_enabled"):
+			crosshair_bloom_enabled = bool(cf.get_value("misc", "crosshair_bloom_enabled"))
 
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
@@ -419,6 +445,14 @@ func apply_defaults() -> void:
 	compass_color_g = 220
 	compass_color_b = 220
 	compass_color_a = 0.95
+	crosshair_enabled = false
+	crosshair_color_r = 220
+	crosshair_color_g = 220
+	crosshair_color_b = 220
+	crosshair_color_a = 0.95
+	crosshair_shape = "crosshair"
+	crosshair_scale_pct = 100.0
+	crosshair_bloom_enabled = true
 	status_inactive_r = status_color_r
 	status_inactive_g = status_color_g
 	status_inactive_b = status_color_b
@@ -449,6 +483,15 @@ func get_compass_color() -> Color:
 		clampf(float(compass_color_g) / 255.0, 0.0, 1.0),
 		clampf(float(compass_color_b) / 255.0, 0.0, 1.0),
 		clampf(float(compass_color_a), 0.0, 1.0)
+	)
+
+
+func get_crosshair_color() -> Color:
+	return Color(
+		clampf(float(crosshair_color_r) / 255.0, 0.0, 1.0),
+		clampf(float(crosshair_color_g) / 255.0, 0.0, 1.0),
+		clampf(float(crosshair_color_b) / 255.0, 0.0, 1.0),
+		clampf(float(crosshair_color_a), 0.0, 1.0)
 	)
 
 

@@ -143,6 +143,12 @@ static func _build_misc(cfg: RefCounted) -> Dictionary:
 		"compass_anchor": str(cfg.compass_anchor),
 		"compass_rgb": [int(cfg.compass_color_r), int(cfg.compass_color_g), int(cfg.compass_color_b)],
 		"compass_alpha": float(cfg.compass_color_a),
+		"crosshair_enabled": bool(cfg.crosshair_enabled),
+		"crosshair_rgb": [int(cfg.crosshair_color_r), int(cfg.crosshair_color_g), int(cfg.crosshair_color_b)],
+		"crosshair_alpha": float(cfg.crosshair_color_a),
+		"crosshair_shape": str(cfg.crosshair_shape),
+		"crosshair_scale_pct": float(cfg.crosshair_scale_pct),
+		"crosshair_bloom_enabled": bool(cfg.crosshair_bloom_enabled),
 	}
 
 
@@ -283,6 +289,22 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.compass_color_b = clampi(int(crgb[2]), 0, 255)
 		if mx.has("compass_alpha"):
 			cfg.compass_color_a = clampf(float(mx["compass_alpha"]), 0.0, 1.0)
+		if mx.has("crosshair_enabled"):
+			cfg.crosshair_enabled = bool(mx["crosshair_enabled"])
+		var xrgb := _optional_rgb_arr(mx, "crosshair_rgb")
+		if xrgb.size() >= 3:
+			cfg.crosshair_color_r = clampi(int(xrgb[0]), 0, 255)
+			cfg.crosshair_color_g = clampi(int(xrgb[1]), 0, 255)
+			cfg.crosshair_color_b = clampi(int(xrgb[2]), 0, 255)
+		if mx.has("crosshair_alpha"):
+			cfg.crosshair_color_a = clampf(float(mx["crosshair_alpha"]), 0.0, 1.0)
+		if mx.has("crosshair_shape"):
+			var sh := str(mx["crosshair_shape"]).strip_edges().to_lower()
+			cfg.crosshair_shape = "dot" if sh == "dot" else "crosshair"
+		if mx.has("crosshair_scale_pct"):
+			cfg.crosshair_scale_pct = clampf(float(mx["crosshair_scale_pct"]), 25.0, 300.0)
+		if mx.has("crosshair_bloom_enabled"):
+			cfg.crosshair_bloom_enabled = bool(mx["crosshair_bloom_enabled"])
 
 	if d.has("fps_map"):
 		var fm := _as_dict(d["fps_map"])
