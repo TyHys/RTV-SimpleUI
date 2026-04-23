@@ -130,6 +130,12 @@ var status_inactive_alpha: float = 0.25
 var status_strip_alignment: String = "trailing"
 ## When true, hidden ailment icons are removed from strip flow so visible ones stay packed to the selected edge.
 var status_fill_empty_space: bool = false
+## Misc: minimalist compass strip.
+var compass_enabled: bool = false
+var compass_color_r: int = 220
+var compass_color_g: int = 220
+var compass_color_b: int = 220
+var compass_color_a: float = 0.95
 
 var fps_map_alpha: float = 0.5
 var fps_map_scale: float = 0.81
@@ -284,6 +290,18 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		if cf.has_section_key("status_icons", "fill_empty_space"):
 			status_fill_empty_space = bool(cf.get_value("status_icons", "fill_empty_space"))
 
+	if cf.has_section("misc"):
+		if cf.has_section_key("misc", "compass_enabled"):
+			compass_enabled = bool(cf.get_value("misc", "compass_enabled"))
+		if cf.has_section_key("misc", "compass_color_r"):
+			compass_color_r = clampi(int(cf.get_value("misc", "compass_color_r")), 0, 255)
+		if cf.has_section_key("misc", "compass_color_g"):
+			compass_color_g = clampi(int(cf.get_value("misc", "compass_color_g")), 0, 255)
+		if cf.has_section_key("misc", "compass_color_b"):
+			compass_color_b = clampi(int(cf.get_value("misc", "compass_color_b")), 0, 255)
+		if cf.has_section_key("misc", "compass_color_a"):
+			compass_color_a = clampf(float(cf.get_value("misc", "compass_color_a")), 0.0, 1.0)
+
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
 			fps_map_alpha = clampf(float(cf.get_value("fps_map", "alpha")), 0.0, 1.0)
@@ -391,6 +409,11 @@ func apply_defaults() -> void:
 	status_anchor = "right"
 	status_strip_alignment = "trailing"
 	status_fill_empty_space = false
+	compass_enabled = false
+	compass_color_r = 220
+	compass_color_g = 220
+	compass_color_b = 220
+	compass_color_a = 0.95
 	status_inactive_r = status_color_r
 	status_inactive_g = status_color_g
 	status_inactive_b = status_color_b
@@ -413,6 +436,15 @@ func get_status_icon_color() -> Color:
 
 func get_status_inactive_icon_color() -> Color:
 	return Color8(status_inactive_r, status_inactive_g, status_inactive_b, 255)
+
+
+func get_compass_color() -> Color:
+	return Color(
+		clampf(float(compass_color_r) / 255.0, 0.0, 1.0),
+		clampf(float(compass_color_g) / 255.0, 0.0, 1.0),
+		clampf(float(compass_color_b) / 255.0, 0.0, 1.0),
+		clampf(float(compass_color_a), 0.0, 1.0)
+	)
 
 
 func get_vitals_transparency_mode() -> String:

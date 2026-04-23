@@ -61,6 +61,7 @@ static func persist_preferences_json(cfg: RefCounted) -> void:
 	merged["vitals_layout"] = _build_vitals_layout(cfg)
 	merged["vitals"] = _build_vitals_stats(cfg)
 	merged["status"] = _build_status(cfg)
+	merged["misc"] = _build_misc(cfg)
 	merged["fps_map"] = _build_fps_map(cfg)
 	var out := JSON.stringify(merged, "\t")
 	var wf := FileAccess.open(USER_PATH, FileAccess.WRITE)
@@ -133,6 +134,14 @@ static func _build_status(cfg: RefCounted) -> Dictionary:
 		"inactive_alpha": float(cfg.status_inactive_alpha),
 		"rgb": [int(cfg.status_color_r), int(cfg.status_color_g), int(cfg.status_color_b)],
 		"inactive_rgb": [int(cfg.status_inactive_r), int(cfg.status_inactive_g), int(cfg.status_inactive_b)],
+	}
+
+
+static func _build_misc(cfg: RefCounted) -> Dictionary:
+	return {
+		"compass_enabled": bool(cfg.compass_enabled),
+		"compass_rgb": [int(cfg.compass_color_r), int(cfg.compass_color_g), int(cfg.compass_color_b)],
+		"compass_alpha": float(cfg.compass_color_a),
 	}
 
 
@@ -258,6 +267,18 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.status_stack_direction = "vertical_up"
 		else:
 			cfg.status_stack_direction = "horizontal_left"
+
+	if d.has("misc"):
+		var mx := _as_dict(d["misc"])
+		if mx.has("compass_enabled"):
+			cfg.compass_enabled = bool(mx["compass_enabled"])
+		var crgb := _optional_rgb_arr(mx, "compass_rgb")
+		if crgb.size() >= 3:
+			cfg.compass_color_r = clampi(int(crgb[0]), 0, 255)
+			cfg.compass_color_g = clampi(int(crgb[1]), 0, 255)
+			cfg.compass_color_b = clampi(int(crgb[2]), 0, 255)
+		if mx.has("compass_alpha"):
+			cfg.compass_color_a = clampf(float(mx["compass_alpha"]), 0.0, 1.0)
 
 	if d.has("fps_map"):
 		var fm := _as_dict(d["fps_map"])

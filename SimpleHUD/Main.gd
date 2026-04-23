@@ -471,6 +471,24 @@ func apply_vitals_strip_settings_from_ui(
 	refresh_hud_layout()
 
 
+func get_misc_settings_for_ui() -> Dictionary:
+	return {
+		"compass_enabled": bool(_cfg.compass_enabled),
+		"compass_r": int(_cfg.compass_color_r),
+		"compass_g": int(_cfg.compass_color_g),
+		"compass_b": int(_cfg.compass_color_b),
+	}
+
+
+func apply_misc_settings_from_ui(compass_enabled: bool, compass_r: int, compass_g: int, compass_b: int) -> void:
+	_cfg.compass_enabled = compass_enabled
+	_cfg.compass_color_r = clampi(compass_r, 0, 255)
+	_cfg.compass_color_g = clampi(compass_g, 0, 255)
+	_cfg.compass_color_b = clampi(compass_b, 0, 255)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	refresh_hud_layout()
+
+
 func get_simplehud_active_preset_id() -> String:
 	if _cfg == null:
 		return ""
@@ -525,6 +543,10 @@ func _cfg_signature(cfg: RefCounted) -> Dictionary:
 			"fill_empty_space": bool(cfg.status_fill_empty_space),
 			"rgb": [int(cfg.status_color_r), int(cfg.status_color_g), int(cfg.status_color_b)],
 			"inactive_rgb": [int(cfg.status_inactive_r), int(cfg.status_inactive_g), int(cfg.status_inactive_b)],
+		},
+		"misc": {
+			"compass_enabled": bool(cfg.compass_enabled),
+			"compass_rgb": [int(cfg.compass_color_r), int(cfg.compass_color_g), int(cfg.compass_color_b)],
 		},
 		"stat_text_colors": {
 			"mode": str(cfg.stat_text_color_mode),

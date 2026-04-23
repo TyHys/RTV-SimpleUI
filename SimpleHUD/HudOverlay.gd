@@ -3,6 +3,7 @@ extends Control
 const SimpleHUDConfigScript := preload("res://SimpleHUD/Config.gd")
 const STAT_WIDGET_SCRIPT := preload("res://SimpleHUD/widgets/StatWidget.gd")
 const STATUS_TRAY_SCRIPT := preload("res://SimpleHUD/widgets/StatusTray.gd")
+const COMPASS_STRIP_SCRIPT := preload("res://SimpleHUD/widgets/CompassStrip.gd")
 
 var _game_data: Resource
 var _cfg: RefCounted
@@ -11,6 +12,7 @@ var _stats_root: Control
 var _widgets: Dictionary = {}
 
 var _tray: STATUS_TRAY_SCRIPT
+var _compass: Control
 
 ## Mirrors escape-menu → Settings HUD toggles (Preferences.vitals / Preferences.medical).
 var _prefs_vitals: bool = true
@@ -55,6 +57,10 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 	add_child(_tray)
 	_tray.refresh()
 
+	_compass = COMPASS_STRIP_SCRIPT.new()
+	_compass.setup(cfg)
+	add_child(_compass)
+
 
 ## After swapping the Config instance on Main (e.g. main-menu preset load), rebind widgets and tray to the new object.
 func apply_live_config(cfg: RefCounted) -> void:
@@ -71,6 +77,8 @@ func apply_live_config(cfg: RefCounted) -> void:
 	if _tray != null:
 		_tray.setup(_game_data, cfg)
 		_tray.rebuild_from_cfg()
+	if _compass != null && (_compass as Object).has_method(&"setup"):
+		(_compass as Node).call(&"setup", cfg)
 
 
 func configure_hud_prefs(vitals_on: bool, medical_on: bool) -> void:
@@ -117,6 +125,8 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 
 	if _tray:
 		_layout_status_tray(vp_size)
+	if _compass != null:
+		_layout_compass(vp_size, stats_visible)
 
 
 func _layout_vitals(vp: Vector2) -> void:
@@ -405,10 +415,37 @@ func _layout_status_tray(vp: Vector2) -> void:
 	_tray.size = tray_size
 
 
+func _layout_compass(vp: Vector2, stats_visible: bool) -> void:
+	if _compass == null:
+		return
+	var show_compass: bool = bool(_cfg.compass_enabled) && bool(stats_visible) && bool(_cfg.enabled)
+	_compass.visible = show_compass
+	if !show_compass:
+		return
+	var compass_size := _compass.get_combined_minimum_size()
+	if compass_size.x <= 1.0 || compass_size.y <= 1.0:
+		compass_size = Vector2(520.0, 44.0)
+	var x := (vp.x - compass_size.x) * 0.5
+	var use_bottom := _should_place_compass_bottom()
+	var y := maxf(0.0, vp.y - compass_size.y - 8.0) if use_bottom else 8.0
+	_compass.position = Vector2(x, y)
+	_compass.size = compass_size
+
+
+func _should_place_compass_bottom() -> bool:
+	for sid in SimpleHUDConfigScript.STAT_IDS:
+		if str(_cfg.get_vitals_anchor(sid)).to_lower() == "top":
+			return true
+	if str(_cfg.status_anchor).to_lower() == "top":
+		return true
+	return false
+
+
 ## `skip_prefs_guard`: when true, refresh widgets even if escape-menu HUD has vitals disabled — used after inventory panel edits so the overlay matches saved cfg.
 func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false) -> void:
 	if !_cfg.enabled || !is_instance_valid(_game_data):
 		return
+	_tick_compass()
 	if !skip_prefs_guard && !_prefs_vitals:
 		return
 
@@ -437,6 +474,28 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false) -> void:
 		var w := _widgets.get(sid) as STAT_WIDGET_SCRIPT
 		if w != null:
 			w.update_display(p, show_stat, use_radial, alpha)
+
+
+func _tick_compass() -> void:
+	if _compass == null || !bool(_cfg.compass_enabled):
+		return
+	if !(_compass as Object).has_method(&"set_bearing_degrees"):
+		return
+	var bearing := _bearing_from_game_data()
+	(_compass as Node).call(&"set_bearing_degrees", bearing)
+
+
+func _bearing_from_game_data() -> float:
+	if _game_data == null || !is_instance_valid(_game_data):
+		return 0.0
+	var pv: Variant = _game_data.get("playerVector")
+	if pv is Vector3:
+		var v: Vector3 = pv as Vector3
+		if v.length() > 0.001:
+			var dir := v.normalized()
+			var yaw := rad_to_deg(atan2(dir.x, dir.z))
+			return wrapf(yaw, 0.0, 360.0)
+	return 0.0
 
 
 func _uses_radial_mode() -> bool:

@@ -23,6 +23,10 @@ var _b_spin: SpinBox
 var _ir_spin: SpinBox
 var _ig_spin: SpinBox
 var _ib_spin: SpinBox
+var _compass_enable_cb: CheckBox
+var _compass_r_spin: SpinBox
+var _compass_g_spin: SpinBox
+var _compass_b_spin: SpinBox
 
 var _spacing_spin: SpinBox
 var _vitals_strip_align_opt: OptionButton
@@ -60,13 +64,17 @@ var _current_preset_value: Label
 var _customize_toggle_btn: Button
 var _vitals_toggle_btn: Button
 var _ailments_toggle_btn: Button
+var _misc_toggle_btn: Button
 var _customize_open: bool = false
 var _vitals_open: bool = false
 var _ailments_open: bool = false
+var _misc_open: bool = false
 var _vitals_start_idx: int = -1
 var _vitals_end_idx: int = -1
 var _ailments_start_idx: int = -1
 var _ailments_end_idx: int = -1
+var _misc_start_idx: int = -1
+var _misc_end_idx: int = -1
 
 
 func _init(menu_root: Control, panel_root: Control) -> void:
@@ -295,6 +303,13 @@ func build(vbox: VBoxContainer) -> void:
 	_ailments_toggle_btn.pressed.connect(_on_ailments_section_toggled)
 	vbox.add_child(_ailments_toggle_btn)
 
+	_misc_toggle_btn = Button.new()
+	_misc_toggle_btn.toggle_mode = true
+	_misc_toggle_btn.button_pressed = _misc_open
+	_misc_toggle_btn.focus_mode = Control.FOCUS_ALL
+	_misc_toggle_btn.pressed.connect(_on_misc_section_toggled)
+	vbox.add_child(_misc_toggle_btn)
+
 	vbox.add_child(HSeparator.new())
 	_ailments_start_idx = vbox.get_child_count()
 
@@ -388,6 +403,36 @@ func build(vbox: VBoxContainer) -> void:
 	_inactive_alpha_spin.value_changed.connect(_on_status_numeric_field_changed)
 	_ailments_end_idx = vbox.get_child_count() - 1
 
+	vbox.add_child(HSeparator.new())
+	_misc_start_idx = vbox.get_child_count()
+
+	var misc_title := Label.new()
+	misc_title.text = "Misc"
+	misc_title.add_theme_font_size_override("font_size", 18)
+	vbox.add_child(misc_title)
+
+	_compass_enable_cb = CheckBox.new()
+	_compass_enable_cb.text = "Enable Compass"
+	_compass_enable_cb.focus_mode = Control.FOCUS_NONE
+	_compass_enable_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_compass_enable_cb)
+
+	var comp_rgb_title := Label.new()
+	comp_rgb_title.text = "Compass color (RGB)"
+	comp_rgb_title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(comp_rgb_title)
+
+	var comp_rgb_row := HBoxContainer.new()
+	comp_rgb_row.add_theme_constant_override("separation", 8)
+	_compass_r_spin = _mini_spin(comp_rgb_row, "R", 0, 255)
+	_compass_g_spin = _mini_spin(comp_rgb_row, "G", 0, 255)
+	_compass_b_spin = _mini_spin(comp_rgb_row, "B", 0, 255)
+	_compass_r_spin.value_changed.connect(_on_misc_field_changed)
+	_compass_g_spin.value_changed.connect(_on_misc_field_changed)
+	_compass_b_spin.value_changed.connect(_on_misc_field_changed)
+	vbox.add_child(comp_rgb_row)
+	_misc_end_idx = vbox.get_child_count() - 1
+
 	sync_from_main()
 	_refresh_expandable_state()
 	_panel_menu_log("SettingsPanel.build() end vbox_children=%d" % vbox.get_child_count())
@@ -420,8 +465,13 @@ func _refresh_expandable_state() -> void:
 		_ailments_toggle_btn.visible = _customize_open
 		_ailments_toggle_btn.text = "Ailments %s" % ("▼" if _ailments_open else "▶")
 		_ailments_toggle_btn.button_pressed = _ailments_open
+	if _misc_toggle_btn != null:
+		_misc_toggle_btn.visible = _customize_open
+		_misc_toggle_btn.text = "Misc %s" % ("▼" if _misc_open else "▶")
+		_misc_toggle_btn.button_pressed = _misc_open
 	_set_vbox_children_visible(root, _vitals_start_idx, _vitals_end_idx, _customize_open && _vitals_open)
 	_set_vbox_children_visible(root, _ailments_start_idx, _ailments_end_idx, _customize_open && _ailments_open)
+	_set_vbox_children_visible(root, _misc_start_idx, _misc_end_idx, _customize_open && _misc_open)
 
 
 func _current_content_vbox() -> VBoxContainer:
@@ -444,6 +494,11 @@ func _on_vitals_section_toggled() -> void:
 
 func _on_ailments_section_toggled() -> void:
 	_ailments_open = _ailments_toggle_btn.button_pressed if _ailments_toggle_btn != null else _ailments_open
+	_refresh_expandable_state()
+
+
+func _on_misc_section_toggled() -> void:
+	_misc_open = _misc_toggle_btn.button_pressed if _misc_toggle_btn != null else _misc_open
 	_refresh_expandable_state()
 
 
@@ -471,6 +526,7 @@ func on_menu_opened() -> void:
 	_customize_open = false
 	_vitals_open = false
 	_ailments_open = false
+	_misc_open = false
 	_refresh_expandable_state()
 	sync_from_main()
 
@@ -676,6 +732,13 @@ func sync_from_main() -> void:
 	_refresh_vitals_order_option_items(str(strip.get("strip_alignment", "leading")))
 	_vitals_fill_empty_cb.set_pressed_no_signal(bool(strip.get("fill_empty_space", false)))
 
+	if m.has_method(&"get_misc_settings_for_ui"):
+		var misc: Dictionary = (m as Node).call(&"get_misc_settings_for_ui")
+		_compass_enable_cb.set_pressed_no_signal(bool(misc.get("compass_enabled", false)))
+		_compass_r_spin.set_value_no_signal(float(misc.get("compass_r", 220)))
+		_compass_g_spin.set_value_no_signal(float(misc.get("compass_g", 220)))
+		_compass_b_spin.set_value_no_signal(float(misc.get("compass_b", 220)))
+
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
 	_vitals_transparency_opt.set_block_signals(true)
 	match vm:
@@ -838,6 +901,22 @@ func _apply_strip_from_ui() -> void:
 	_refresh_current_preset_label()
 
 
+func _apply_misc_from_ui() -> void:
+	if _ui_sync:
+		return
+	var mm := _simplehud_main()
+	if mm == null || !(mm as Object).has_method(&"apply_misc_settings_from_ui"):
+		return
+	(mm as Node).call(
+		&"apply_misc_settings_from_ui",
+		_compass_enable_cb.button_pressed,
+		int(_compass_r_spin.value),
+		int(_compass_g_spin.value),
+		int(_compass_b_spin.value)
+	)
+	_refresh_current_preset_label()
+
+
 func _update_vitals_static_opacity_row_visibility() -> void:
 	if _vitals_static_opacity_row != null:
 		_vitals_static_opacity_row.visible = _vitals_transparency_opt.selected == 1
@@ -917,6 +996,14 @@ func _on_auto_hide_toggled(_on: bool) -> void:
 
 func _on_ailments_fill_empty_toggled(_on: bool) -> void:
 	_apply_status_from_ui()
+
+
+func _on_misc_field_toggled(_on: bool) -> void:
+	_apply_misc_from_ui()
+
+
+func _on_misc_field_changed(_v: float) -> void:
+	_apply_misc_from_ui()
 
 
 func _on_anchor_selected(_idx: int) -> void:
