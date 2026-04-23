@@ -29,12 +29,18 @@ var _prefs_cache_frame: int = -10000
 const _PREFS_CACHE_TTL_FRAMES := 30
 
 var _logged_overlay_missing_refresh: bool = false
+var _hud_force_hidden: bool = false
+var _next_toggle_hud_bind_probe_frame: int = 0
+const _TOGGLE_HUD_BIND_PROBE_INTERVAL_FRAMES := 30
 
 ## Main menu (`Menu.tscn`) SimpleHUD overlay; used to close on Escape and from Return.
 var _simplehud_main_menu_scene: Control = null
 var _simplehud_main_menu_panel_layer: Control = null
 var _simplehud_menu_inner: Control = null
 var _fps_info_node: Control = null
+var _fps_hide_prefix_last: bool = true
+var _map_label_mode_last: String = "default"
+var _map_label_full_cache: String = ""
 var _next_menu_install_probe_frame: int = 0
 const _MENU_INSTALL_PROBE_INTERVAL_FRAMES := 10
 
@@ -48,6 +54,7 @@ const SIMPLEHUD_MENU_MAX_HEIGHT := 920.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_ensure_toggle_hud_action()
 	_cfg = SimpleHUDConfigScript.new()
 	_cfg.load_all()
 	UserPreferencesScript.merge_into(_cfg)
@@ -487,6 +494,10 @@ func get_misc_settings_for_ui() -> Dictionary:
 		"crosshair_shape": str(_cfg.crosshair_shape),
 		"crosshair_scale_pct": float(_cfg.crosshair_scale_pct),
 		"crosshair_bloom_enabled": bool(_cfg.crosshair_bloom_enabled),
+		"crosshair_hide_during_aiming": bool(_cfg.crosshair_hide_during_aiming),
+		"crosshair_hide_while_stowed": bool(_cfg.crosshair_hide_while_stowed),
+		"fps_hide_label_prefix": bool(_cfg.fps_hide_label_prefix),
+		"map_label_mode": str(_cfg.map_label_mode),
 	}
 
 
@@ -505,6 +516,10 @@ func apply_misc_settings_from_ui(
 	crosshair_shape: String,
 	crosshair_scale_pct: float,
 	crosshair_bloom_enabled: bool,
+	crosshair_hide_during_aiming: bool,
+	crosshair_hide_while_stowed: bool,
+	fps_hide_label_prefix: bool,
+	map_label_mode: String,
 ) -> void:
 	_cfg.compass_enabled = compass_enabled
 	_cfg.compass_anchor = "bottom" if str(compass_anchor).to_lower() == "bottom" else "top"
@@ -521,6 +536,16 @@ func apply_misc_settings_from_ui(
 	_cfg.crosshair_shape = "dot" if sh == "dot" else "crosshair"
 	_cfg.crosshair_scale_pct = clampf(crosshair_scale_pct, 25.0, 300.0)
 	_cfg.crosshair_bloom_enabled = crosshair_bloom_enabled
+	_cfg.crosshair_hide_during_aiming = crosshair_hide_during_aiming
+	_cfg.crosshair_hide_while_stowed = crosshair_hide_while_stowed
+	_cfg.fps_hide_label_prefix = fps_hide_label_prefix
+	var mm := str(map_label_mode).to_lower()
+	match mm:
+		"map_only", "region_only":
+			_cfg.map_label_mode = mm
+		_:
+			_cfg.map_label_mode = "default"
+	_fps_info_node = null
 	UserPreferencesScript.persist_preferences_json(_cfg)
 	refresh_hud_layout()
 
@@ -591,6 +616,10 @@ func _cfg_signature(cfg: RefCounted) -> Dictionary:
 			"crosshair_shape": str(cfg.crosshair_shape),
 			"crosshair_scale_pct": float(cfg.crosshair_scale_pct),
 			"crosshair_bloom_enabled": bool(cfg.crosshair_bloom_enabled),
+			"crosshair_hide_during_aiming": bool(cfg.crosshair_hide_during_aiming),
+			"crosshair_hide_while_stowed": bool(cfg.crosshair_hide_while_stowed),
+			"fps_hide_label_prefix": bool(cfg.fps_hide_label_prefix),
+			"map_label_mode": str(cfg.map_label_mode),
 		},
 		"stat_text_colors": {
 			"mode": str(cfg.stat_text_color_mode),
@@ -783,6 +812,7 @@ func _refresh_hud_layout_impl() -> void:
 	_overlay.configure_hud_prefs(vitals_on, medical_on)
 	if hud != null:
 		_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
+		hud.modulate.a = 0.0 if _hud_force_hidden else 1.0
 	var live := _resolve_live_game_data(hud)
 	if live != null && is_instance_valid(live):
 		_overlay.set_live_game_data(live)
@@ -790,7 +820,7 @@ func _refresh_hud_layout_impl() -> void:
 		_overlay.set_live_game_data(game_data)
 	var gd_menu: Resource = live if live != null && is_instance_valid(live) else game_data
 	var menu_hide := _game_data_menu_open(gd_menu)
-	var show_layer: bool = !menu_hide
+	var show_layer: bool = !menu_hide && !_hud_force_hidden
 	_overlay.tick(0.0, true)
 	_overlay.notify_config_changed()
 	var vp_sz: Vector2 = (
@@ -800,10 +830,18 @@ func _refresh_hud_layout_impl() -> void:
 
 
 func _process(delta: float) -> void:
+	_ensure_toggle_hud_action()
+	if Input.is_action_just_pressed("toggle_hud"):
+		_hud_force_hidden = !_hud_force_hidden
+		refresh_hud_layout()
+
 	var frame := Engine.get_process_frames()
 	if frame >= _next_menu_install_probe_frame:
 		_next_menu_install_probe_frame = frame + _MENU_INSTALL_PROBE_INTERVAL_FRAMES
 		_try_install_simplehud_main_menu()
+	if frame >= _next_toggle_hud_bind_probe_frame:
+		_next_toggle_hud_bind_probe_frame = frame + _TOGGLE_HUD_BIND_PROBE_INTERVAL_FRAMES
+		_try_patch_toggle_hud_binding_ui()
 	if !_cfg.enabled:
 		_clear_binding(true)
 		return
@@ -853,6 +891,7 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	_overlay.configure_hud_prefs(vitals_on, medical_on)
 
 	_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
+	hud.modulate.a = 0.0 if _hud_force_hidden else 1.0
 
 	var live := _resolve_live_game_data(hud)
 	if live != null && is_instance_valid(live):
@@ -866,7 +905,7 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	# Drive our vitals strip only from pause/menu — not from HUD/Stats.visible. The game may hide the
 	# Stats node while gameplay values are still meaningful; tying show_layer to it skipped tick()
 	# and left the overlay blank (no updates, widgets never filled in).
-	var show_layer: bool = !menu_hide
+	var show_layer: bool = !menu_hide && !_hud_force_hidden
 
 	if show_layer:
 		_overlay.tick(delta)
@@ -908,6 +947,66 @@ func _prefs_bool(prefs: Resource, key: StringName, fallback: bool) -> bool:
 	return bool(v)
 
 
+func _toggle_hud_key_default_event() -> InputEventKey:
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_EQUAL
+	ev.keycode = KEY_EQUAL
+	return ev
+
+
+func _preferred_toggle_hud_event() -> InputEvent:
+	var prefs := _load_preferences(false)
+	if prefs != null && is_instance_valid(prefs):
+		var action_events: Variant = prefs.get("actionEvents")
+		if action_events is Dictionary:
+			var d := action_events as Dictionary
+			if d.has("toggle_hud") && d["toggle_hud"] is InputEvent:
+				return d["toggle_hud"] as InputEvent
+	return _toggle_hud_key_default_event()
+
+
+func _ensure_toggle_hud_action() -> void:
+	if !InputMap.has_action("toggle_hud"):
+		InputMap.add_action("toggle_hud")
+	if InputMap.action_get_events("toggle_hud").is_empty():
+		InputMap.action_add_event("toggle_hud", _preferred_toggle_hud_event())
+
+
+func _try_patch_toggle_hud_binding_ui() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var root := tree.root
+	if root == null:
+		return
+	var stack: Array = [root]
+	while !stack.is_empty():
+		var n := stack.pop_back()
+		for c in n.get_children():
+			stack.append(c)
+		if !(n as Object).has_method(&"CreateActions"):
+			continue
+		var inputs_v: Variant = n.get("inputs")
+		if !(inputs_v is Dictionary):
+			continue
+		var inputs := (inputs_v as Dictionary).duplicate(true)
+		if !inputs.has("toggle_hud"):
+			inputs["toggle_hud"] = "Toggle HUD"
+			n.set("inputs", inputs)
+			n.call(&"CreateActions")
+		_ensure_toggle_hud_action()
+		var actions_v: Variant = n.get("actions")
+		if actions_v is Node:
+			var actions_node := actions_v as Node
+			for btn in actions_node.get_children():
+				var action_label := btn.find_child("LabelAction")
+				var input_label := btn.find_child("LabelInput")
+				if action_label is Label && input_label is Label:
+					if (action_label as Label).text == "Toggle HUD":
+						var evs := InputMap.action_get_events("toggle_hud")
+						(input_label as Label).text = evs[0].as_text().trim_suffix("- Physical") if !evs.is_empty() else ""
+
+
 ## Targets HUD/Info (same nodes Settings → HUD.ShowMap / ShowFPS affect). Visibility is driven by vanilla + prefs.map / prefs.FPS.
 func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 	var info := hud.get_node_or_null("Info") as Control
@@ -915,6 +1014,7 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 		return
 
 	_ensure_fps_label_style(info)
+	_apply_map_label_style(info)
 	info.scale = Vector2(_cfg.fps_map_scale, _cfg.fps_map_scale)
 	info.position = Vector2(_cfg.fps_map_offset_x, _cfg.fps_map_offset_y)
 	var a: float = clampf(float(_cfg.fps_map_alpha), 0.0, 1.0)
@@ -923,35 +1023,71 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 func _ensure_fps_label_style(info: Control) -> void:
 	if info == null:
 		return
-	if _fps_info_node == info:
+	var hide_prefix: bool = bool(_cfg.fps_hide_label_prefix)
+	if _fps_info_node == info && _fps_hide_prefix_last == hide_prefix:
 		return
 	_fps_info_node = info
-	# Keep only the numeric FPS readout and force it white for readability.
-	var fps_label := info.get_node_or_null("FPS") as Label
-	if fps_label != null:
-		var fps_text := fps_label.text.strip_edges()
-		if fps_text.begins_with("FPS"):
-			fps_text = fps_text.trim_prefix("FPS")
-			if fps_text.begins_with(":"):
-				fps_text = fps_text.trim_prefix(":")
-			fps_text = fps_text.strip_edges()
-		fps_label.text = fps_text
-		fps_label.add_theme_color_override("font_color", Color.WHITE)
+	_fps_hide_prefix_last = hide_prefix
+	# Vanilla HUD: `Info/FPS` is a Label with text "FPS:", and `Info/FPS/Frames` is the numeric child.
+	# Do not toggle visibility on the FPS Label — that hides the nested Frames label too when it works,
+	# and strict `as Label` casts can fail while `FPS/Frames` resolves, producing overlap. Clear prefix text instead.
+	var fps_prefix: Node = info.get_node_or_null(NodePath("FPS"))
+	var fps_prefix_label: Label = null
+	if fps_prefix != null && (fps_prefix is Label):
+		fps_prefix_label = fps_prefix as Label
+	if fps_prefix_label != null:
+		if hide_prefix:
+			fps_prefix_label.text = ""
+		else:
+			fps_prefix_label.text = "FPS:"
+		fps_prefix_label.visible = true
+		fps_prefix_label.add_theme_color_override("font_color", Color.WHITE)
 
-	var fps_value := info.get_node_or_null("FPS/Frames") as Label
+	var fps_value := info.get_node_or_null(NodePath("FPS/Frames")) as Label
 	if fps_value != null:
-		var val_text := fps_value.text.strip_edges()
-		if val_text.begins_with("FPS"):
-			val_text = val_text.trim_prefix("FPS")
-			if val_text.begins_with(":"):
-				val_text = val_text.trim_prefix(":")
-			val_text = val_text.strip_edges()
-		fps_value.text = val_text
 		fps_value.add_theme_color_override("font_color", Color.WHITE)
 		fps_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		# Vanilla scene offsets Frames by +36 to clear "FPS:"; collapse that gap.
-		fps_value.offset_left = 0.0
-		fps_value.offset_right = 40.0
+		if hide_prefix:
+			# Collapse vanilla +36 gap when "FPS:" prefix is hidden.
+			fps_value.offset_left = 0.0
+			fps_value.offset_right = 40.0
+		else:
+			# Restore vanilla spacing with visible "FPS:" prefix.
+			fps_value.offset_left = 36.0
+			fps_value.offset_right = 76.0
+
+
+func _apply_map_label_style(info: Control) -> void:
+	if info == null:
+		return
+	var map_label := info.get_node_or_null("Map") as Label
+	if map_label == null:
+		return
+	var mode := str(_cfg.map_label_mode).strip_edges().to_lower()
+	if mode != "default" && mode != "map_only" && mode != "region_only":
+		mode = "default"
+	var txt := map_label.text.strip_edges()
+	if txt.find("(") != -1 && txt.find(")") != -1:
+		_map_label_full_cache = txt
+	var full := _map_label_full_cache if _map_label_full_cache != "" else txt
+	var map_name := full
+	var region_name := ""
+	var open := full.find("(")
+	var close := full.rfind(")")
+	if open != -1 && close > open:
+		map_name = full.substr(0, open).strip_edges()
+		region_name = full.substr(open + 1, close - open - 1).strip_edges()
+	var out := full
+	match mode:
+		"map_only":
+			out = map_name if map_name != "" else full
+		"region_only":
+			out = region_name if region_name != "" else full
+		_:
+			out = full
+	if _map_label_mode_last != mode || map_label.text != out:
+		map_label.text = out
+	_map_label_mode_last = mode
 
 
 func _clear_binding(restore_vanilla: bool = false) -> void:
@@ -972,6 +1108,7 @@ func _clear_binding(restore_vanilla: bool = false) -> void:
 func _restore_vanilla_hud_visibility(hud: Control) -> void:
 	if hud == null || !is_instance_valid(hud):
 		return
+	hud.modulate.a = 1.0
 	var prefs := _load_preferences(true)
 	var vitals_on: bool = _prefs_bool(prefs, &"vitals", true)
 	var medical_on: bool = _prefs_bool(prefs, &"medical", true)

@@ -149,6 +149,10 @@ static func _build_misc(cfg: RefCounted) -> Dictionary:
 		"crosshair_shape": str(cfg.crosshair_shape),
 		"crosshair_scale_pct": float(cfg.crosshair_scale_pct),
 		"crosshair_bloom_enabled": bool(cfg.crosshair_bloom_enabled),
+		"crosshair_hide_during_aiming": bool(cfg.crosshair_hide_during_aiming),
+		"crosshair_hide_while_stowed": bool(cfg.crosshair_hide_while_stowed),
+		"fps_hide_label_prefix": bool(cfg.fps_hide_label_prefix),
+		"map_label_mode": str(cfg.map_label_mode),
 	}
 
 
@@ -305,6 +309,19 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.crosshair_scale_pct = clampf(float(mx["crosshair_scale_pct"]), 25.0, 300.0)
 		if mx.has("crosshair_bloom_enabled"):
 			cfg.crosshair_bloom_enabled = bool(mx["crosshair_bloom_enabled"])
+		if mx.has("crosshair_hide_during_aiming"):
+			cfg.crosshair_hide_during_aiming = bool(mx["crosshair_hide_during_aiming"])
+		if mx.has("crosshair_hide_while_stowed"):
+			cfg.crosshair_hide_while_stowed = bool(mx["crosshair_hide_while_stowed"])
+		if mx.has("fps_hide_label_prefix"):
+			cfg.fps_hide_label_prefix = bool(mx["fps_hide_label_prefix"])
+		if mx.has("map_label_mode"):
+			var mm := str(mx["map_label_mode"]).strip_edges().to_lower()
+			match mm:
+				"map_only", "region_only":
+					cfg.map_label_mode = mm
+				_:
+					cfg.map_label_mode = "default"
 
 	if d.has("fps_map"):
 		var fm := _as_dict(d["fps_map"])

@@ -146,6 +146,11 @@ var crosshair_color_a: float = 0.95
 var crosshair_shape: String = "crosshair"
 var crosshair_scale_pct: float = 100.0
 var crosshair_bloom_enabled: bool = true
+var crosshair_hide_during_aiming: bool = false
+var crosshair_hide_while_stowed: bool = false
+var fps_hide_label_prefix: bool = true
+## "default" | "map_only" | "region_only"
+var map_label_mode: String = "default"
 
 var fps_map_alpha: float = 0.5
 var fps_map_scale: float = 0.81
@@ -331,6 +336,19 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			crosshair_scale_pct = clampf(float(cf.get_value("misc", "crosshair_scale_pct")), 25.0, 300.0)
 		if cf.has_section_key("misc", "crosshair_bloom_enabled"):
 			crosshair_bloom_enabled = bool(cf.get_value("misc", "crosshair_bloom_enabled"))
+		if cf.has_section_key("misc", "crosshair_hide_during_aiming"):
+			crosshair_hide_during_aiming = bool(cf.get_value("misc", "crosshair_hide_during_aiming"))
+		if cf.has_section_key("misc", "crosshair_hide_while_stowed"):
+			crosshair_hide_while_stowed = bool(cf.get_value("misc", "crosshair_hide_while_stowed"))
+		if cf.has_section_key("misc", "fps_hide_label_prefix"):
+			fps_hide_label_prefix = bool(cf.get_value("misc", "fps_hide_label_prefix"))
+		if cf.has_section_key("misc", "map_label_mode"):
+			var mm := str(cf.get_value("misc", "map_label_mode")).strip_edges().to_lower()
+			match mm:
+				"map_only", "region_only":
+					map_label_mode = mm
+				_:
+					map_label_mode = "default"
 
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
@@ -453,6 +471,10 @@ func apply_defaults() -> void:
 	crosshair_shape = "crosshair"
 	crosshair_scale_pct = 100.0
 	crosshair_bloom_enabled = true
+	crosshair_hide_during_aiming = false
+	crosshair_hide_while_stowed = false
+	fps_hide_label_prefix = true
+	map_label_mode = "default"
 	status_inactive_r = status_color_r
 	status_inactive_g = status_color_g
 	status_inactive_b = status_color_b

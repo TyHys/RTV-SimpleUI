@@ -446,7 +446,9 @@ func _layout_compass(vp: Vector2, stats_visible: bool) -> void:
 func _layout_crosshair(vp: Vector2, stats_visible: bool) -> void:
 	if _crosshair == null:
 		return
-	var show_crosshair: bool = bool(_cfg.crosshair_enabled) && bool(stats_visible) && bool(_cfg.enabled)
+	var hide_for_ads: bool = _crosshair_hidden_for_ads()
+	var hide_for_stowed: bool = _crosshair_hidden_for_stowed()
+	var show_crosshair: bool = bool(_cfg.crosshair_enabled) && bool(stats_visible) && bool(_cfg.enabled) && !hide_for_ads && !hide_for_stowed
 	_crosshair.visible = show_crosshair
 	if !show_crosshair:
 		return
@@ -457,6 +459,25 @@ func _layout_crosshair(vp: Vector2, stats_visible: bool) -> void:
 	var y := (vp.y - xsz.y) * 0.5
 	_crosshair.position = Vector2(x, y)
 	_crosshair.size = xsz
+
+
+func _crosshair_hidden_for_ads() -> bool:
+	if !bool(_cfg.crosshair_hide_during_aiming):
+		return false
+	if _game_data == null || !is_instance_valid(_game_data):
+		return false
+	var aiming := bool(_game_data.get("isAiming"))
+	var canted := bool(_game_data.get("isCanted"))
+	return aiming && !canted
+
+
+func _crosshair_hidden_for_stowed() -> bool:
+	if !bool(_cfg.crosshair_hide_while_stowed):
+		return false
+	if _game_data == null || !is_instance_valid(_game_data):
+		return false
+	var any_weapon_out := bool(_game_data.get("primary")) || bool(_game_data.get("secondary")) || bool(_game_data.get("knife")) || bool(_game_data.get("grenade1")) || bool(_game_data.get("grenade2"))
+	return !any_weapon_out
 
 
 ## `skip_prefs_guard`: when true, refresh widgets even if escape-menu HUD has vitals disabled — used after inventory panel edits so the overlay matches saved cfg.

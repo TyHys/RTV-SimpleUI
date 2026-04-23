@@ -42,6 +42,15 @@ var _crosshair_scale_spin: SpinBox
 var _crosshair_scale_row: Control
 var _crosshair_bloom_cb: CheckBox
 var _crosshair_bloom_row: Control
+var _crosshair_hide_ads_cb: CheckBox
+var _crosshair_hide_ads_row: Control
+var _crosshair_hide_stowed_cb: CheckBox
+var _crosshair_hide_stowed_row: Control
+var _crosshair_group_end_sep: Control
+var _fps_hide_label_cb: CheckBox
+var _fps_hide_label_row: Control
+var _map_label_mode_opt: OptionButton
+var _map_label_mode_row: Control
 var _crosshair_rgb_title: Label
 var _crosshair_rgb_row: Control
 var _crosshair_r_spin: SpinBox
@@ -314,6 +323,7 @@ func build(vbox: VBoxContainer) -> void:
 	_g_lo_pct.value_changed.connect(_on_stat_field_changed_val)
 	row_lo.add_child(_g_lo_pct)
 	_grad_custom.add_child(row_lo)
+	vbox.add_child(HSeparator.new())
 	_vitals_end_idx = vbox.get_child_count() - 1
 
 	_ailments_toggle_btn = Button.new()
@@ -322,15 +332,6 @@ func build(vbox: VBoxContainer) -> void:
 	_ailments_toggle_btn.focus_mode = Control.FOCUS_ALL
 	_ailments_toggle_btn.pressed.connect(_on_ailments_section_toggled)
 	vbox.add_child(_ailments_toggle_btn)
-
-	_misc_toggle_btn = Button.new()
-	_misc_toggle_btn.toggle_mode = true
-	_misc_toggle_btn.button_pressed = _misc_open
-	_misc_toggle_btn.focus_mode = Control.FOCUS_ALL
-	_misc_toggle_btn.pressed.connect(_on_misc_section_toggled)
-	vbox.add_child(_misc_toggle_btn)
-
-	vbox.add_child(HSeparator.new())
 	_ailments_start_idx = vbox.get_child_count()
 
 	var title := Label.new()
@@ -421,9 +422,15 @@ func build(vbox: VBoxContainer) -> void:
 
 	_inactive_alpha_spin = _add_labeled_spin(vbox, "Inactive ailment opacity (%)", 0, 100, 1, 0)
 	_inactive_alpha_spin.value_changed.connect(_on_status_numeric_field_changed)
+	vbox.add_child(HSeparator.new())
 	_ailments_end_idx = vbox.get_child_count() - 1
 
-	vbox.add_child(HSeparator.new())
+	_misc_toggle_btn = Button.new()
+	_misc_toggle_btn.toggle_mode = true
+	_misc_toggle_btn.button_pressed = _misc_open
+	_misc_toggle_btn.focus_mode = Control.FOCUS_ALL
+	_misc_toggle_btn.pressed.connect(_on_misc_section_toggled)
+	vbox.add_child(_misc_toggle_btn)
 	_misc_start_idx = vbox.get_child_count()
 
 	var misc_title := Label.new()
@@ -512,6 +519,48 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(_crosshair_bloom_cb)
 	_crosshair_bloom_row = _crosshair_bloom_cb
 
+	_crosshair_hide_ads_cb = CheckBox.new()
+	_crosshair_hide_ads_cb.text = "Hide during aiming"
+	_crosshair_hide_ads_cb.focus_mode = Control.FOCUS_NONE
+	_crosshair_hide_ads_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_crosshair_hide_ads_cb)
+	_crosshair_hide_ads_row = _crosshair_hide_ads_cb
+
+	_crosshair_hide_stowed_cb = CheckBox.new()
+	_crosshair_hide_stowed_cb.text = "Hide while stowed"
+	_crosshair_hide_stowed_cb.focus_mode = Control.FOCUS_NONE
+	_crosshair_hide_stowed_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_crosshair_hide_stowed_cb)
+	_crosshair_hide_stowed_row = _crosshair_hide_stowed_cb
+
+	var crosshair_end_sep := HSeparator.new()
+	vbox.add_child(crosshair_end_sep)
+	_crosshair_group_end_sep = crosshair_end_sep
+
+	_fps_hide_label_cb = CheckBox.new()
+	_fps_hide_label_cb.text = "Hide \"FPS:\" label prefix"
+	_fps_hide_label_cb.focus_mode = Control.FOCUS_NONE
+	_fps_hide_label_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_fps_hide_label_cb)
+	_fps_hide_label_row = _fps_hide_label_cb
+
+	var map_mode_row := HBoxContainer.new()
+	map_mode_row.add_theme_constant_override("separation", 8)
+	var map_mode_lbl := Label.new()
+	map_mode_lbl.text = "Map label format"
+	map_mode_lbl.custom_minimum_size.x = 160
+	map_mode_row.add_child(map_mode_lbl)
+	_map_label_mode_opt = OptionButton.new()
+	_map_label_mode_opt.focus_mode = Control.FOCUS_ALL
+	_map_label_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_label_mode_opt.add_item("Default (Village (Area 05))")
+	_map_label_mode_opt.add_item("Map Only (Village)")
+	_map_label_mode_opt.add_item("Region Only (Area 05)")
+	_map_label_mode_opt.item_selected.connect(_on_misc_field_changed_idx)
+	map_mode_row.add_child(_map_label_mode_opt)
+	vbox.add_child(map_mode_row)
+	_map_label_mode_row = map_mode_row
+
 	_crosshair_rgb_title = Label.new()
 	_crosshair_rgb_title.text = "Crosshair color (RGB)"
 	_crosshair_rgb_title.add_theme_font_size_override("font_size", 14)
@@ -527,6 +576,8 @@ func build(vbox: VBoxContainer) -> void:
 	_crosshair_b_spin.value_changed.connect(_on_misc_field_changed)
 	vbox.add_child(xr_rgb_row)
 	_crosshair_rgb_row = xr_rgb_row
+
+	vbox.add_child(HSeparator.new())
 	_misc_end_idx = vbox.get_child_count() - 1
 
 	sync_from_main()
@@ -568,6 +619,8 @@ func _refresh_expandable_state() -> void:
 	_set_vbox_children_visible(root, _vitals_start_idx, _vitals_end_idx, _customize_open && _vitals_open)
 	_set_vbox_children_visible(root, _ailments_start_idx, _ailments_end_idx, _customize_open && _ailments_open)
 	_set_vbox_children_visible(root, _misc_start_idx, _misc_end_idx, _customize_open && _misc_open)
+	# Re-apply nested Misc visibility after section-level visibility changes.
+	_update_misc_compass_rows_visibility()
 
 
 func _current_content_vbox() -> VBoxContainer:
@@ -841,6 +894,16 @@ func sync_from_main() -> void:
 		_crosshair_alpha_spin.set_value_no_signal(float(misc.get("crosshair_alpha_pct", 95.0)))
 		_crosshair_scale_spin.set_value_no_signal(float(misc.get("crosshair_scale_pct", 100.0)))
 		_crosshair_bloom_cb.set_pressed_no_signal(bool(misc.get("crosshair_bloom_enabled", true)))
+		_crosshair_hide_ads_cb.set_pressed_no_signal(bool(misc.get("crosshair_hide_during_aiming", false)))
+		_crosshair_hide_stowed_cb.set_pressed_no_signal(bool(misc.get("crosshair_hide_while_stowed", false)))
+		_fps_hide_label_cb.set_pressed_no_signal(bool(misc.get("fps_hide_label_prefix", true)))
+		match str(misc.get("map_label_mode", "default")).to_lower():
+			"map_only":
+				_map_label_mode_opt.select(1)
+			"region_only":
+				_map_label_mode_opt.select(2)
+			_:
+				_map_label_mode_opt.select(0)
 		_crosshair_r_spin.set_value_no_signal(float(misc.get("crosshair_r", 220)))
 		_crosshair_g_spin.set_value_no_signal(float(misc.get("crosshair_g", 220)))
 		_crosshair_b_spin.set_value_no_signal(float(misc.get("crosshair_b", 220)))
@@ -1029,13 +1092,18 @@ func _apply_misc_from_ui() -> void:
 		int(_crosshair_b_spin.value),
 		"dot" if _crosshair_shape_opt.selected == 1 else "crosshair",
 		float(_crosshair_scale_spin.value),
-		_crosshair_bloom_cb.button_pressed
+		_crosshair_bloom_cb.button_pressed,
+		_crosshair_hide_ads_cb.button_pressed,
+		_crosshair_hide_stowed_cb.button_pressed,
+		_fps_hide_label_cb.button_pressed,
+		"map_only" if _map_label_mode_opt.selected == 1 else ("region_only" if _map_label_mode_opt.selected == 2 else "default")
 	)
 	_refresh_current_preset_label()
 
 
 func _update_misc_compass_rows_visibility() -> void:
-	var show_extra: bool = _compass_enable_cb != null && _compass_enable_cb.button_pressed
+	var show_misc: bool = _customize_open && _misc_open
+	var show_extra: bool = show_misc && _compass_enable_cb != null && _compass_enable_cb.button_pressed
 	if _compass_anchor_row != null:
 		(_compass_anchor_row as CanvasItem).visible = show_extra
 	if _compass_alpha_row != null:
@@ -1044,7 +1112,7 @@ func _update_misc_compass_rows_visibility() -> void:
 		_compass_rgb_title.visible = show_extra
 	if _compass_rgb_row != null:
 		(_compass_rgb_row as CanvasItem).visible = show_extra
-	var show_crosshair: bool = _crosshair_enable_cb != null && _crosshair_enable_cb.button_pressed
+	var show_crosshair: bool = show_misc && _crosshair_enable_cb != null && _crosshair_enable_cb.button_pressed
 	if _crosshair_shape_row != null:
 		(_crosshair_shape_row as CanvasItem).visible = show_crosshair
 	if _crosshair_alpha_row != null:
@@ -1053,6 +1121,16 @@ func _update_misc_compass_rows_visibility() -> void:
 		(_crosshair_scale_row as CanvasItem).visible = show_crosshair
 	if _crosshair_bloom_row != null:
 		(_crosshair_bloom_row as CanvasItem).visible = show_crosshair
+	if _crosshair_hide_ads_row != null:
+		(_crosshair_hide_ads_row as CanvasItem).visible = show_crosshair
+	if _crosshair_hide_stowed_row != null:
+		(_crosshair_hide_stowed_row as CanvasItem).visible = show_crosshair
+	if _crosshair_group_end_sep != null:
+		(_crosshair_group_end_sep as CanvasItem).visible = show_crosshair
+	if _fps_hide_label_row != null:
+		(_fps_hide_label_row as CanvasItem).visible = show_misc
+	if _map_label_mode_row != null:
+		(_map_label_mode_row as CanvasItem).visible = show_misc
 	if _crosshair_rgb_title != null:
 		_crosshair_rgb_title.visible = show_crosshair
 	if _crosshair_rgb_row != null:
