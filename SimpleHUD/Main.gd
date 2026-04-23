@@ -474,14 +474,25 @@ func apply_vitals_strip_settings_from_ui(
 func get_misc_settings_for_ui() -> Dictionary:
 	return {
 		"compass_enabled": bool(_cfg.compass_enabled),
+		"compass_anchor": str(_cfg.compass_anchor),
+		"compass_alpha_pct": clampf(float(_cfg.compass_color_a), 0.0, 1.0) * 100.0,
 		"compass_r": int(_cfg.compass_color_r),
 		"compass_g": int(_cfg.compass_color_g),
 		"compass_b": int(_cfg.compass_color_b),
 	}
 
 
-func apply_misc_settings_from_ui(compass_enabled: bool, compass_r: int, compass_g: int, compass_b: int) -> void:
+func apply_misc_settings_from_ui(
+	compass_enabled: bool,
+	compass_anchor: String,
+	compass_alpha_pct: float,
+	compass_r: int,
+	compass_g: int,
+	compass_b: int,
+) -> void:
 	_cfg.compass_enabled = compass_enabled
+	_cfg.compass_anchor = "bottom" if str(compass_anchor).to_lower() == "bottom" else "top"
+	_cfg.compass_color_a = clampf(float(compass_alpha_pct) / 100.0, 0.0, 1.0)
 	_cfg.compass_color_r = clampi(compass_r, 0, 255)
 	_cfg.compass_color_g = clampi(compass_g, 0, 255)
 	_cfg.compass_color_b = clampi(compass_b, 0, 255)
@@ -546,6 +557,8 @@ func _cfg_signature(cfg: RefCounted) -> Dictionary:
 		},
 		"misc": {
 			"compass_enabled": bool(cfg.compass_enabled),
+			"compass_anchor": str(cfg.compass_anchor),
+			"compass_alpha": float(cfg.compass_color_a),
 			"compass_rgb": [int(cfg.compass_color_r), int(cfg.compass_color_g), int(cfg.compass_color_b)],
 		},
 		"stat_text_colors": {

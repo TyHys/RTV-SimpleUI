@@ -426,19 +426,10 @@ func _layout_compass(vp: Vector2, stats_visible: bool) -> void:
 	if compass_size.x <= 1.0 || compass_size.y <= 1.0:
 		compass_size = Vector2(520.0, 44.0)
 	var x := (vp.x - compass_size.x) * 0.5
-	var use_bottom := _should_place_compass_bottom()
+	var use_bottom: bool = str(_cfg.compass_anchor).to_lower() == "bottom"
 	var y := maxf(0.0, vp.y - compass_size.y - 8.0) if use_bottom else 8.0
 	_compass.position = Vector2(x, y)
 	_compass.size = compass_size
-
-
-func _should_place_compass_bottom() -> bool:
-	for sid in SimpleHUDConfigScript.STAT_IDS:
-		if str(_cfg.get_vitals_anchor(sid)).to_lower() == "top":
-			return true
-	if str(_cfg.status_anchor).to_lower() == "top":
-		return true
-	return false
 
 
 ## `skip_prefs_guard`: when true, refresh widgets even if escape-menu HUD has vitals disabled — used after inventory panel edits so the overlay matches saved cfg.

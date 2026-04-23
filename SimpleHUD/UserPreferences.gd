@@ -140,6 +140,7 @@ static func _build_status(cfg: RefCounted) -> Dictionary:
 static func _build_misc(cfg: RefCounted) -> Dictionary:
 	return {
 		"compass_enabled": bool(cfg.compass_enabled),
+		"compass_anchor": str(cfg.compass_anchor),
 		"compass_rgb": [int(cfg.compass_color_r), int(cfg.compass_color_g), int(cfg.compass_color_b)],
 		"compass_alpha": float(cfg.compass_color_a),
 	}
@@ -272,6 +273,9 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 		var mx := _as_dict(d["misc"])
 		if mx.has("compass_enabled"):
 			cfg.compass_enabled = bool(mx["compass_enabled"])
+		if mx.has("compass_anchor"):
+			var ax := str(mx["compass_anchor"]).strip_edges().to_lower()
+			cfg.compass_anchor = "bottom" if ax == "bottom" else "top"
 		var crgb := _optional_rgb_arr(mx, "compass_rgb")
 		if crgb.size() >= 3:
 			cfg.compass_color_r = clampi(int(crgb[0]), 0, 255)

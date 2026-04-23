@@ -24,9 +24,15 @@ var _ir_spin: SpinBox
 var _ig_spin: SpinBox
 var _ib_spin: SpinBox
 var _compass_enable_cb: CheckBox
+var _compass_anchor_opt: OptionButton
+var _compass_anchor_row: Control
+var _compass_alpha_spin: SpinBox
+var _compass_alpha_row: Control
 var _compass_r_spin: SpinBox
 var _compass_g_spin: SpinBox
 var _compass_b_spin: SpinBox
+var _compass_rgb_title: Label
+var _compass_rgb_row: Control
 
 var _spacing_spin: SpinBox
 var _vitals_strip_align_opt: OptionButton
@@ -417,10 +423,30 @@ func build(vbox: VBoxContainer) -> void:
 	_compass_enable_cb.toggled.connect(_on_misc_field_toggled)
 	vbox.add_child(_compass_enable_cb)
 
-	var comp_rgb_title := Label.new()
-	comp_rgb_title.text = "Compass color (RGB)"
-	comp_rgb_title.add_theme_font_size_override("font_size", 14)
-	vbox.add_child(comp_rgb_title)
+	var misc_anchor_row := HBoxContainer.new()
+	misc_anchor_row.add_theme_constant_override("separation", 8)
+	var misc_anchor_lbl := Label.new()
+	misc_anchor_lbl.text = "Edge"
+	misc_anchor_lbl.custom_minimum_size.x = 160
+	misc_anchor_row.add_child(misc_anchor_lbl)
+	_compass_anchor_opt = OptionButton.new()
+	_compass_anchor_opt.focus_mode = Control.FOCUS_ALL
+	_compass_anchor_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_compass_anchor_opt.add_item("Top")
+	_compass_anchor_opt.add_item("Bottom")
+	_compass_anchor_opt.item_selected.connect(_on_misc_field_changed_idx)
+	misc_anchor_row.add_child(_compass_anchor_opt)
+	vbox.add_child(misc_anchor_row)
+	_compass_anchor_row = misc_anchor_row
+
+	_compass_alpha_spin = _add_labeled_spin(vbox, "Transparency (%)", 0, 100, 1, 0)
+	_compass_alpha_spin.value_changed.connect(_on_misc_field_changed)
+	_compass_alpha_row = _compass_alpha_spin.get_parent()
+
+	_compass_rgb_title = Label.new()
+	_compass_rgb_title.text = "Compass color (RGB)"
+	_compass_rgb_title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(_compass_rgb_title)
 
 	var comp_rgb_row := HBoxContainer.new()
 	comp_rgb_row.add_theme_constant_override("separation", 8)
@@ -431,6 +457,7 @@ func build(vbox: VBoxContainer) -> void:
 	_compass_g_spin.value_changed.connect(_on_misc_field_changed)
 	_compass_b_spin.value_changed.connect(_on_misc_field_changed)
 	vbox.add_child(comp_rgb_row)
+	_compass_rgb_row = comp_rgb_row
 	_misc_end_idx = vbox.get_child_count() - 1
 
 	sync_from_main()
@@ -735,9 +762,12 @@ func sync_from_main() -> void:
 	if m.has_method(&"get_misc_settings_for_ui"):
 		var misc: Dictionary = (m as Node).call(&"get_misc_settings_for_ui")
 		_compass_enable_cb.set_pressed_no_signal(bool(misc.get("compass_enabled", false)))
+		_compass_anchor_opt.select(1 if str(misc.get("compass_anchor", "top")).to_lower() == "bottom" else 0)
+		_compass_alpha_spin.set_value_no_signal(float(misc.get("compass_alpha_pct", 95.0)))
 		_compass_r_spin.set_value_no_signal(float(misc.get("compass_r", 220)))
 		_compass_g_spin.set_value_no_signal(float(misc.get("compass_g", 220)))
 		_compass_b_spin.set_value_no_signal(float(misc.get("compass_b", 220)))
+	_update_misc_compass_rows_visibility()
 
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
 	_vitals_transparency_opt.set_block_signals(true)
@@ -910,11 +940,25 @@ func _apply_misc_from_ui() -> void:
 	(mm as Node).call(
 		&"apply_misc_settings_from_ui",
 		_compass_enable_cb.button_pressed,
+		"bottom" if _compass_anchor_opt.selected == 1 else "top",
+		float(_compass_alpha_spin.value),
 		int(_compass_r_spin.value),
 		int(_compass_g_spin.value),
 		int(_compass_b_spin.value)
 	)
 	_refresh_current_preset_label()
+
+
+func _update_misc_compass_rows_visibility() -> void:
+	var show_extra: bool = _compass_enable_cb != null && _compass_enable_cb.button_pressed
+	if _compass_anchor_row != null:
+		(_compass_anchor_row as CanvasItem).visible = show_extra
+	if _compass_alpha_row != null:
+		(_compass_alpha_row as CanvasItem).visible = show_extra
+	if _compass_rgb_title != null:
+		_compass_rgb_title.visible = show_extra
+	if _compass_rgb_row != null:
+		(_compass_rgb_row as CanvasItem).visible = show_extra
 
 
 func _update_vitals_static_opacity_row_visibility() -> void:
@@ -999,10 +1043,15 @@ func _on_ailments_fill_empty_toggled(_on: bool) -> void:
 
 
 func _on_misc_field_toggled(_on: bool) -> void:
+	_update_misc_compass_rows_visibility()
 	_apply_misc_from_ui()
 
 
 func _on_misc_field_changed(_v: float) -> void:
+	_apply_misc_from_ui()
+
+
+func _on_misc_field_changed_idx(_idx: int) -> void:
 	_apply_misc_from_ui()
 
 

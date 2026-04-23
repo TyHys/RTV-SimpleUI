@@ -132,6 +132,7 @@ var status_strip_alignment: String = "trailing"
 var status_fill_empty_space: bool = false
 ## Misc: minimalist compass strip.
 var compass_enabled: bool = false
+var compass_anchor: String = "top"
 var compass_color_r: int = 220
 var compass_color_g: int = 220
 var compass_color_b: int = 220
@@ -293,6 +294,9 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 	if cf.has_section("misc"):
 		if cf.has_section_key("misc", "compass_enabled"):
 			compass_enabled = bool(cf.get_value("misc", "compass_enabled"))
+		if cf.has_section_key("misc", "compass_anchor"):
+			var ax := str(cf.get_value("misc", "compass_anchor")).strip_edges().to_lower()
+			compass_anchor = "bottom" if ax == "bottom" else "top"
 		if cf.has_section_key("misc", "compass_color_r"):
 			compass_color_r = clampi(int(cf.get_value("misc", "compass_color_r")), 0, 255)
 		if cf.has_section_key("misc", "compass_color_g"):
@@ -410,6 +414,7 @@ func apply_defaults() -> void:
 	status_strip_alignment = "trailing"
 	status_fill_empty_space = false
 	compass_enabled = false
+	compass_anchor = "top"
 	compass_color_r = 220
 	compass_color_g = 220
 	compass_color_b = 220
