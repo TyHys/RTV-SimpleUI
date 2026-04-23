@@ -1,18 +1,22 @@
-# SimpleHUD - Modular HUD Framework
+# SimpleHUD - Customizable HUD Framework
 
-SimpleHUD is a **HUD framework** for Road to Vostok designed for players who want to customize the core HUD elements using a core set of common tools and configurations.
+SimpleHUD gives you a configurable HUD for Road to Vostok, using presets that can be futher customized to the user.
 
-This workshop release now ships as **one download** (`SimpleUI.vmz`) with built-in presets and an in-game configuration menu.
+This workshop release ships as **one download** (`SimpleUI.vmz`) with:
 
-## How The UI Works
+- built-in presets
+- live in-game configuration
+- persistent per-player customization
 
-SimpleHUD focuses on readable, context-driven information:
+## What This Framework Lets You Control
 
-- **Unneeded clutter is hidden:** stats and status elements can stay out of view until they matter (based on configured thresholds and status conditions).
-- **Affliction/status icons are context-aware:** by default, only active/afflicted conditions are shown in the status tray.
-- **Transparency options are flexible:** choose dynamic urgency-based fading, or static opacity with an adjustable percentage.
-- **Two stat display styles:** choose either numeric text values or icon-centered radial donut charts (think stamina bars from Breath of the Wild).
-- **NoHide-style behavior available:** presets and UI settings support always-visible, high-readability variants.
+- **Visibility logic:** show vitals/status only when they matter, or keep them always visible.
+- **Stat presentation:** numeric text or radial donuts.
+- **Threshold behavior:** control when each vital becomes visible.
+- **Color logic:** use preset colors, white-only styles, or configurable gradient behavior.
+- **Transparency behavior:** dynamic urgency fading or static opacity with adjustable percentage.
+- **Layout behavior:** tune edge placement, ordering, padding, spacing, and scale for both vitals and ailments.
+- **Ailment behavior:** choose hidden/inflicted/always modes plus active and inactive tint/opacity styling.
 
 ## In-Game Configuration (Main Menu)
 
@@ -24,44 +28,30 @@ Open the game main menu and click **SimpleHUD**:
   - **Vitals**: edge, order, spacing, thresholds, transparency mode (dynamic/static + static opacity), gradient colors/thresholds
   - **Ailments**: edge/order, spacing/scale, active+inactive tint, inactive opacity
 
-All changes apply live and are saved per-player.
-
-## Saved Settings
-
-SimpleHUD stores user changes in:
-
-- `user://simplehud_preferences.json`
-
-This is in the game's user-data/appdata location (not in the Steam install directory).
+All changes apply live and save across sessions.
 
 ## Preset Preview Screenshots
 
-- **RadialColor** [View screenshot](https://i.imgur.com/JiJhTxs.jpeg)
-- **RadialPlain** [View screenshot](https://i.imgur.com/vIVukmX.jpeg)
-- **TextNumericColor** [View screenshot](https://i.imgur.com/zOtEZyy.jpeg)
-- **TextNumericPlain** [View screenshot](https://i.imgur.com/KS9XR07.jpeg)
-- **RadialColorNoHide** [View screenshot](https://i.imgur.com/3BJlOwj.jpeg)
-- **RadialPlainNoHide** [View screenshot](https://i.imgur.com/EVE1cFA.jpeg)
-- **TextNumericColorNoHide** [View screenshot](https://i.imgur.com/rUnAw5S.jpeg)
-- **TextNumericPlainNoHide** [View screenshot](https://i.imgur.com/q0LktUb.jpeg)
+- **Radial, Color** [View screenshot](https://i.imgur.com/2DQ5A08.jpeg)
+- **Radial, Plain** [View screenshot](https://i.imgur.com/y15br14.jpeg)
+- **Text/Numeric, Color** [View screenshot](https://i.imgur.com/dcnM95H.jpeg)
+- **Text/Numeric, Plain** [View screenshot](https://i.imgur.com/XMHXqOr.jpeg)
+- **RadialColor, No Hide** [View screenshot](https://i.imgur.com/bspvrl4.jpeg)
+- **RadialPlain, No Hide** [View screenshot](https://i.imgur.com/y8UcRwB.jpeg)
+- **Text/Numeric, Color, No Hide** [View screenshot](https://i.imgur.com/A2Qutb0.jpeg)
+- **Text/Numeric, Plain, No Hide** [View screenshot](https://i.imgur.com/oYguSZw.jpeg)
 
 > **Note:** These screenshots show style baselines included in the single package.  
 > `NoHide` styles prioritize always-on readability. `Color` styles use configurable threshold-driven color transitions.
 
-## How To Choose
+## How To Install
 
-Start from the preset that looks closest to what you want, then fine-tune inside the SimpleHUD menu.
+1. Install **Metro Mod Loader** (follow its official installation steps and requirements).
+2. Place `SimpleUI.vmz` in your Road to Vostok mods directory used by Metro Mod Loader.
+3. Launch the game and verify Metro Mod Loader reports `Simple HUD` as loaded.
+4. Open the main menu and click **SimpleHUD** to choose a preset or customize.
 
-## Framework-First Design
-
-SimpleHUD is built to be a configurable foundation:
-
-- per-stat visibility thresholds
-- radial vs numeric presentation
-- text/radial color behavior
-- transparency behavior
-- HUD placement and spacing controls
-- status icon and info layout controls
+For loader setup details, troubleshooting, and path specifics, refer to Metro Mod Loader documentation.
 
 ## Recent Improvements
 
@@ -69,5 +59,10 @@ SimpleHUD is built to be a configurable foundation:
 - Stamina/fatigue now share the same default threshold behavior as other non-health vitals.
 - Debug diagnostics are quieter by default while preserving warning/error visibility.
 
-If you like to tune your HUD over time, this framework is meant to grow with your setup rather than lock you into one static style. If you have a vision for a HUD you feel is not possible with the current framework, please feel free to reach out to me. I would be willing to expand this featureset given the right vision.
+If you like evolving your HUD over time, this framework is designed to grow with your setup instead of forcing one static UI. If there is a behavior you want that is not possible yet, reach out and I can expand the framework.
 
+## Saved Settings
+
+SimpleHUD stores user changes in:
+
+- `user://simplehud_preferences.json`

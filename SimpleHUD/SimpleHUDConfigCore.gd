@@ -128,6 +128,8 @@ var status_inactive_b: int = 0
 var status_inactive_alpha: float = 0.25
 ## Along the ailment strip: leading | center | trailing (HBox: LTR/centered/RTL; VBox: top/center/bottom packing).
 var status_strip_alignment: String = "trailing"
+## When true, hidden ailment icons are removed from strip flow so visible ones stay packed to the selected edge.
+var status_fill_empty_space: bool = false
 
 var fps_map_alpha: float = 0.5
 var fps_map_scale: float = 0.81
@@ -143,6 +145,8 @@ var vitals_margin_bottom: float = 5.0
 var vitals_spacing_default_px: float = 12.0
 ## How vitals that share an edge are distributed along that edge: leading | center | trailing (LTR / centered block / RTL for horizontal strips; top→down / centered / bottom→up for vertical).
 var vitals_strip_alignment: String = "leading"
+## When true, hidden vitals are removed from layout flow so visible ones collapse toward the selected edge.
+var vitals_fill_empty_space: bool = false
 var vitals_strip_width_px: float = 960.0
 var vitals_row_height_px: float = 36.0
 
@@ -277,6 +281,8 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			status_inactive_b = clampi(int(cf.get_value("status_icons", "inactive_b")), 0, 255)
 		if cf.has_section_key("status_icons", "inactive_alpha"):
 			status_inactive_alpha = clampf(float(cf.get_value("status_icons", "inactive_alpha")), 0.0, 1.0)
+		if cf.has_section_key("status_icons", "fill_empty_space"):
+			status_fill_empty_space = bool(cf.get_value("status_icons", "fill_empty_space"))
 
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
@@ -303,6 +309,8 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			vitals_strip_width_px = clampf(float(cf.get_value("vitals_layout", "strip_width_px")), 120.0, 4096.0)
 		if cf.has_section_key("vitals_layout", "row_height_px"):
 			vitals_row_height_px = clampf(float(cf.get_value("vitals_layout", "row_height_px")), 16.0, 256.0)
+		if cf.has_section_key("vitals_layout", "fill_empty_space"):
+			vitals_fill_empty_space = bool(cf.get_value("vitals_layout", "fill_empty_space"))
 
 	if cf.has_section("stat_text_colors"):
 		if cf.has_section_key("stat_text_colors", "mode"):
@@ -374,6 +382,7 @@ func apply_defaults() -> void:
 	vitals_margin_bottom = 5.0
 	vitals_spacing_default_px = 12.0
 	vitals_strip_alignment = "leading"
+	vitals_fill_empty_space = false
 	vitals_strip_width_px = 960.0
 	vitals_row_height_px = 36.0
 	status_padding_px = 5.0
@@ -381,6 +390,7 @@ func apply_defaults() -> void:
 	status_auto_hide_when_none = false
 	status_anchor = "right"
 	status_strip_alignment = "trailing"
+	status_fill_empty_space = false
 	status_inactive_r = status_color_r
 	status_inactive_g = status_color_g
 	status_inactive_b = status_color_b

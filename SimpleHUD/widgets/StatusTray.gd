@@ -6,8 +6,6 @@ var _cfg: RefCounted
 var _box: Container
 var _icon_nodes: Dictionary = {}
 static var _texture_cache: Dictionary = {}
-var _warned_missing_status_prop: Dictionary = {}
-var _diag_tick: int = 0
 
 func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_game_data = game_data
@@ -82,13 +80,13 @@ func refresh() -> void:
 	if !is_instance_valid(_game_data) || _box == null:
 		return
 
-	_diag_tick += 1
 	var mode: String = str(_cfg.status_mode)
 	if mode == "hidden":
 		visible = false
 		return
 
 	visible = true
+	var fill_empty: bool = bool(_cfg.status_fill_empty_space)
 	var active_color: Color = _cfg.get_status_icon_color()
 	var inactive_rgb: Color = _cfg.get_status_inactive_icon_color()
 	var ina: float = clampf(float(_cfg.status_inactive_alpha), 0.0, 1.0)
@@ -104,8 +102,11 @@ func refresh() -> void:
 		if tr.texture == null:
 			tr.texture = _load_texture_cached(path)
 		var active := _flag_active(flag)
-		if mode == "inflicted_only":
-			tr.visible = active
+		var hidden_by_mode := mode == "inflicted_only" && !active
+		var hidden_by_alpha := !active && mode == "always" && ina <= 0.001
+		var hide_icon := hidden_by_mode || hidden_by_alpha
+		if fill_empty:
+			tr.visible = !hide_icon
 		else:
 			tr.visible = true
 
@@ -119,7 +120,7 @@ func refresh() -> void:
 			"always":
 				tr.modulate = active_color if active else Color(inactive_rgb.r, inactive_rgb.g, inactive_rgb.b, ina)
 			_:
-				tr.modulate = active_color
+				tr.modulate = active_color if active || fill_empty else Color(active_color.r, active_color.g, active_color.b, 0.0)
 
 	var min_size: Vector2 = _box.get_combined_minimum_size()
 	var base_px := float(_cfg.status_icon_size_px) * float(_cfg.status_scale_pct) / 100.0
@@ -127,11 +128,6 @@ func refresh() -> void:
 		min_size = Vector2.ONE * base_px
 	custom_minimum_size = min_size
 	size = min_size
-	if _diag_tick % 180 == 0:
-		_tray_diag(
-			"refresh mode=%s visible_icons=%d total_icons=%d game_data=%s"
-			% [mode, get_icon_count(), _icon_nodes.size(), str(_game_data)]
-		)
 
 
 func get_icon_count() -> int:
@@ -206,17 +202,4 @@ func _status_flag_bool(keys: Array) -> bool:
 		var v: Variant = _game_data.get(key)
 		if v != null:
 			return bool(v)
-	var primary: String = str(keys[0]) if keys.size() > 0 else "<unknown>"
-	if !_warned_missing_status_prop.get(primary, false):
-		_warned_missing_status_prop[primary] = true
-		_tray_diag(
-			"missing status property '%s' on game_data type=%s"
-			% [primary, _game_data.get_class()]
-		)
 	return false
-
-
-func _tray_diag(msg: String) -> void:
-	var mm: Variant = Engine.get_meta(&"SimpleHUDMain", null)
-	if mm != null && (mm as Object).has_method(&"log_diag"):
-		(mm as Node).call(&"log_diag", "[StatusTray] %s" % msg)

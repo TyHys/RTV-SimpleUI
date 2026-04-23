@@ -86,6 +86,7 @@ static func _build_vitals_layout(cfg: RefCounted) -> Dictionary:
 	return {
 		"spacing_px": float(cfg.vitals_spacing_default_px),
 		"strip_alignment": str(cfg.vitals_strip_alignment),
+		"fill_empty_space": bool(cfg.vitals_fill_empty_space),
 		"margin_top": float(cfg.vitals_margin_top),
 		"margin_bottom": float(cfg.vitals_margin_bottom),
 		"margin_left": float(cfg.vitals_margin_left),
@@ -122,6 +123,7 @@ static func _build_status(cfg: RefCounted) -> Dictionary:
 	return {
 		"mode": str(cfg.status_mode),
 		"auto_hide_when_none": bool(cfg.status_auto_hide_when_none),
+		"fill_empty_space": bool(cfg.status_fill_empty_space),
 		"anchor": str(cfg.status_anchor),
 		"spacing_px": float(cfg.status_spacing_px),
 		"padding_px": float(cfg.status_padding_px),
@@ -190,6 +192,8 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.vitals_spacing_default_px = clampf(float(vl["spacing_px"]), 0.0, 256.0)
 		if vl.has("strip_alignment"):
 			cfg.vitals_strip_alignment = normalize_strip_alignment(str(vl["strip_alignment"]))
+		if vl.has("fill_empty_space"):
+			cfg.vitals_fill_empty_space = bool(vl["fill_empty_space"])
 		if vl.has("margin_top"):
 			cfg.vitals_margin_top = clampf(float(vl["margin_top"]), 0.0, 512.0)
 		if vl.has("margin_bottom"):
@@ -218,6 +222,8 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.status_mode = str(st["mode"])
 		if st.has("auto_hide_when_none"):
 			cfg.status_auto_hide_when_none = bool(st["auto_hide_when_none"])
+		if st.has("fill_empty_space"):
+			cfg.status_fill_empty_space = bool(st["fill_empty_space"])
 		if st.has("anchor"):
 			cfg.status_anchor = _normalize_edge(str(st["anchor"]))
 		if st.has("spacing_px"):

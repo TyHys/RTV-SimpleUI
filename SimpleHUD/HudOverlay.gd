@@ -131,6 +131,8 @@ func _layout_vitals(vp: Vector2) -> void:
 		var w: Control = _widgets.get(sid) as Control
 		if w == null:
 			continue
+		if bool(_cfg.vitals_fill_empty_space) && !_widget_counts_for_layout(w):
+			continue
 		var ax := str(_cfg.get_vitals_anchor(sid)).to_lower()
 		if !groups.has(ax):
 			ax = "bottom"
@@ -151,6 +153,14 @@ func _layout_vitals(vp: Vector2) -> void:
 				_place_col_left(vp, ids, pad_edge)
 			"right":
 				_place_col_right(vp, ids, pad_edge)
+
+
+func _widget_counts_for_layout(w: Control) -> bool:
+	if w == null:
+		return false
+	if !w.visible:
+		return false
+	return w.modulate.a > 0.001
 
 
 func _group_edge_padding(ids: Array, anchor: String) -> float:
@@ -341,17 +351,52 @@ func _layout_status_tray(vp: Vector2) -> void:
 
 	var pad := float(_cfg.status_padding_px)
 	var ax := str(_cfg.status_anchor).to_lower()
+	var align := str(_cfg.get_status_strip_alignment())
 	var tw := tray_size.x
 	var th := tray_size.y
 
 	var pos := Vector2(maxf(0.0, vp.x - pad - tw), maxf(0.0, vp.y - pad - th))
 	match ax:
 		"top":
-			pos = Vector2(maxf(0.0, vp.x - pad - tw), pad)
+			var x_top := pad
+			match align:
+				"center":
+					x_top = (vp.x - tw) * 0.5
+				"trailing":
+					x_top = vp.x - pad - tw
+				_:
+					x_top = pad
+			pos = Vector2(clampf(x_top, 0.0, maxf(0.0, vp.x - tw)), pad)
+		"bottom":
+			var x_bottom := pad
+			match align:
+				"center":
+					x_bottom = (vp.x - tw) * 0.5
+				"trailing":
+					x_bottom = vp.x - pad - tw
+				_:
+					x_bottom = pad
+			pos = Vector2(clampf(x_bottom, 0.0, maxf(0.0, vp.x - tw)), maxf(0.0, vp.y - pad - th))
 		"left":
-			pos = Vector2(pad, maxf(0.0, vp.y - pad - th))
-		"bottom", "right":
-			pos = Vector2(maxf(0.0, vp.x - pad - tw), maxf(0.0, vp.y - pad - th))
+			var y_left := pad
+			match align:
+				"center":
+					y_left = (vp.y - th) * 0.5
+				"trailing":
+					y_left = vp.y - pad - th
+				_:
+					y_left = pad
+			pos = Vector2(pad, clampf(y_left, 0.0, maxf(0.0, vp.y - th)))
+		"right":
+			var y_right := pad
+			match align:
+				"center":
+					y_right = (vp.y - th) * 0.5
+				"trailing":
+					y_right = vp.y - pad - th
+				_:
+					y_right = pad
+			pos = Vector2(maxf(0.0, vp.x - pad - tw), clampf(y_right, 0.0, maxf(0.0, vp.y - th)))
 		_:
 			pos = Vector2(maxf(0.0, vp.x - pad - tw), maxf(0.0, vp.y - pad - th))
 

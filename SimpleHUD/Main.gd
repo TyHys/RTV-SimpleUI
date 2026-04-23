@@ -349,6 +349,7 @@ func _try_install_simplehud_main_menu() -> void:
 func get_status_tray_settings_for_ui() -> Dictionary:
 	return {
 		"auto_hide": bool(_cfg.status_auto_hide_when_none),
+		"fill_empty_space": bool(_cfg.status_fill_empty_space),
 		"anchor": str(_cfg.status_anchor),
 		"padding_px": float(_cfg.status_padding_px),
 		"spacing_px": float(_cfg.status_spacing_px),
@@ -368,6 +369,7 @@ func get_status_tray_settings_for_ui() -> Dictionary:
 
 func apply_status_tray_settings_from_ui(
 	auto_hide_empty_tray: bool,
+	fill_empty_space: bool,
 	anchor_key: String,
 	padding_px: float,
 	spacing_px: float,
@@ -382,6 +384,7 @@ func apply_status_tray_settings_from_ui(
 	inactive_b: int,
 ) -> void:
 	_cfg.status_auto_hide_when_none = auto_hide_empty_tray
+	_cfg.status_fill_empty_space = fill_empty_space
 	if auto_hide_empty_tray:
 		_cfg.status_mode = "inflicted_only"
 	else:
@@ -429,6 +432,7 @@ func get_vitals_strip_settings_for_ui() -> Dictionary:
 	return {
 		"spacing_px": float(_cfg.vitals_spacing_default_px),
 		"strip_alignment": str(_cfg.vitals_strip_alignment),
+		"fill_empty_space": bool(_cfg.vitals_fill_empty_space),
 		"vitals_transparency_mode": _cfg.get_vitals_transparency_mode(),
 		"vitals_static_opacity_pct": clampf(float(_cfg.vitals_static_opacity), 0.0, 1.0) * 100.0,
 	}
@@ -454,10 +458,15 @@ func apply_vitals_transparency_from_ui(mode_key: String, static_opacity_pct: flo
 	refresh_hud_layout()
 
 
-func apply_vitals_strip_settings_from_ui(spacing_px: float, strip_alignment_key: String = "") -> void:
+func apply_vitals_strip_settings_from_ui(
+	spacing_px: float,
+	strip_alignment_key: String = "",
+	fill_empty_space: bool = false,
+) -> void:
 	_cfg.vitals_spacing_default_px = clampf(spacing_px, 0.0, 256.0)
 	if strip_alignment_key != "":
 		_cfg.vitals_strip_alignment = UserPreferencesScript.normalize_strip_alignment(strip_alignment_key)
+	_cfg.vitals_fill_empty_space = fill_empty_space
 	UserPreferencesScript.persist_preferences_json(_cfg)
 	refresh_hud_layout()
 
@@ -500,6 +509,7 @@ func _cfg_signature(cfg: RefCounted) -> Dictionary:
 		"vitals_layout": {
 			"spacing_px": float(cfg.vitals_spacing_default_px),
 			"strip_alignment": str(cfg.vitals_strip_alignment),
+			"fill_empty_space": bool(cfg.vitals_fill_empty_space),
 		},
 		"vitals": vitals,
 		"status": {
@@ -512,6 +522,7 @@ func _cfg_signature(cfg: RefCounted) -> Dictionary:
 			"stack_direction": str(cfg.status_stack_direction),
 			"inactive_alpha": float(cfg.status_inactive_alpha),
 			"auto_hide_when_none": bool(cfg.status_auto_hide_when_none),
+			"fill_empty_space": bool(cfg.status_fill_empty_space),
 			"rgb": [int(cfg.status_color_r), int(cfg.status_color_g), int(cfg.status_color_b)],
 			"inactive_rgb": [int(cfg.status_inactive_r), int(cfg.status_inactive_g), int(cfg.status_inactive_b)],
 		},

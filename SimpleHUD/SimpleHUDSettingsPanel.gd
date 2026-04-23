@@ -10,6 +10,7 @@ var _menu_root: Control
 var _panel_root: Control
 
 var _auto_hide_cb: CheckBox
+var _ailments_fill_empty_cb: CheckBox
 var _anchor_option: OptionButton
 var _status_strip_align_opt: OptionButton
 var _padding_spin: SpinBox
@@ -25,6 +26,7 @@ var _ib_spin: SpinBox
 
 var _spacing_spin: SpinBox
 var _vitals_strip_align_opt: OptionButton
+var _vitals_fill_empty_cb: CheckBox
 var _vitals_transparency_opt: OptionButton
 var _vitals_static_opacity_spin: SpinBox
 var _vitals_static_opacity_row: Control
@@ -143,6 +145,12 @@ func build(vbox: VBoxContainer) -> void:
 		],
 	)
 	_vitals_strip_align_opt.item_selected.connect(_on_vitals_strip_align_changed)
+
+	_vitals_fill_empty_cb = CheckBox.new()
+	_vitals_fill_empty_cb.text = "Fill empty space"
+	_vitals_fill_empty_cb.focus_mode = Control.FOCUS_NONE
+	_vitals_fill_empty_cb.toggled.connect(_on_vitals_fill_empty_toggled)
+	vbox.add_child(_vitals_fill_empty_cb)
 
 	_stat_mode = _add_labeled_option(vbox, "Display", ["Numeric", "Radial"])
 	_stat_mode.item_selected.connect(_on_stat_field_changed)
@@ -300,6 +308,12 @@ func build(vbox: VBoxContainer) -> void:
 	_auto_hide_cb.focus_mode = Control.FOCUS_NONE
 	_auto_hide_cb.toggled.connect(_on_auto_hide_toggled)
 	vbox.add_child(_auto_hide_cb)
+
+	_ailments_fill_empty_cb = CheckBox.new()
+	_ailments_fill_empty_cb.text = "Fill empty space"
+	_ailments_fill_empty_cb.focus_mode = Control.FOCUS_NONE
+	_ailments_fill_empty_cb.toggled.connect(_on_ailments_fill_empty_toggled)
+	vbox.add_child(_ailments_fill_empty_cb)
 
 	var anchor_row := HBoxContainer.new()
 	anchor_row.add_theme_constant_override("separation", 8)
@@ -643,6 +657,7 @@ func sync_from_main() -> void:
 
 	var sd: Dictionary = m.get_status_tray_settings_for_ui()
 	_auto_hide_cb.set_pressed_no_signal(bool(sd.get("auto_hide", false)))
+	_ailments_fill_empty_cb.set_pressed_no_signal(bool(sd.get("fill_empty_space", false)))
 	_anchor_option.select(_anchor_index_from_key(str(sd.get("anchor", "right"))))
 	_refresh_ailment_spread_option_items(str(sd.get("strip_alignment", "trailing")))
 	_padding_spin.set_value_no_signal(float(sd.get("padding_px", 5.0)))
@@ -659,6 +674,7 @@ func sync_from_main() -> void:
 	var strip: Dictionary = m.get_vitals_strip_settings_for_ui()
 	_spacing_spin.set_value_no_signal(float(strip.get("spacing_px", 12.0)))
 	_refresh_vitals_order_option_items(str(strip.get("strip_alignment", "leading")))
+	_vitals_fill_empty_cb.set_pressed_no_signal(bool(strip.get("fill_empty_space", false)))
 
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
 	_vitals_transparency_opt.set_block_signals(true)
@@ -787,6 +803,7 @@ func _apply_status_from_ui() -> void:
 		return
 	mm.apply_status_tray_settings_from_ui(
 		_auto_hide_cb.button_pressed,
+		_ailments_fill_empty_cb.button_pressed,
 		_anchor_key_from_index(_anchor_option.selected),
 		float(_padding_spin.value),
 		float(_status_spacing_spin.value),
@@ -816,6 +833,7 @@ func _apply_strip_from_ui() -> void:
 	mm.apply_vitals_strip_settings_from_ui(
 		float(_spacing_spin.value),
 		_vitals_strip_align_key_from_sel(_vitals_strip_align_opt.selected),
+		_vitals_fill_empty_cb.button_pressed,
 	)
 	_refresh_current_preset_label()
 
@@ -897,6 +915,10 @@ func _on_auto_hide_toggled(_on: bool) -> void:
 	_apply_status_from_ui()
 
 
+func _on_ailments_fill_empty_toggled(_on: bool) -> void:
+	_apply_status_from_ui()
+
+
 func _on_anchor_selected(_idx: int) -> void:
 	if _ui_sync:
 		return
@@ -924,6 +946,10 @@ func _on_spacing_strip_changed(_v: float) -> void:
 
 
 func _on_vitals_strip_align_changed(_idx: int) -> void:
+	_apply_strip_from_ui()
+
+
+func _on_vitals_fill_empty_toggled(_on: bool) -> void:
 	_apply_strip_from_ui()
 
 
