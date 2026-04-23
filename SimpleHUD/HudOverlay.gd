@@ -388,8 +388,14 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false) -> void:
 		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
 		var alpha: float = computed
 		if show_stat:
-			var fl: float = float(_cfg.min_stat_alpha_floor)
-			alpha = maxf(computed, fl)
+			match _cfg.get_vitals_transparency_mode():
+				"opaque":
+					alpha = 1.0
+				"static":
+					alpha = clampf(float(_cfg.vitals_static_opacity), 0.0, 1.0)
+				_:
+					var fl: float = float(_cfg.min_stat_alpha_floor)
+					alpha = maxf(computed, fl)
 
 		var w := _widgets.get(sid) as STAT_WIDGET_SCRIPT
 		if w != null:

@@ -74,6 +74,8 @@ static func _build_general(cfg: RefCounted) -> Dictionary:
 	return {
 		"enabled": bool(cfg.enabled),
 		"min_stat_alpha_floor": float(cfg.min_stat_alpha_floor),
+		"vitals_transparency_mode": str(cfg.vitals_transparency_mode),
+		"vitals_static_opacity": float(cfg.vitals_static_opacity),
 		"numeric_only": bool(cfg.numeric_only),
 		"stamina_fatigue_near_zero_cutoff": float(cfg.stamina_fatigue_near_zero_cutoff),
 		"active_preset": str(cfg.get_meta(&"simplehud_active_preset", "")),
@@ -164,10 +166,17 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 		return
 	if d.has("general"):
 		var g := _as_dict(d["general"])
+		var had_vitals_mode := g.has("vitals_transparency_mode")
 		if g.has("enabled"):
 			cfg.enabled = bool(g["enabled"])
 		if g.has("min_stat_alpha_floor"):
 			cfg.min_stat_alpha_floor = clampf(float(g["min_stat_alpha_floor"]), 0.0, 1.0)
+		if g.has("vitals_transparency_mode"):
+			cfg.vitals_transparency_mode = str(g["vitals_transparency_mode"])
+		if g.has("vitals_static_opacity"):
+			cfg.vitals_static_opacity = clampf(float(g["vitals_static_opacity"]), 0.0, 1.0)
+		if !had_vitals_mode && g.has("min_stat_alpha_floor"):
+			cfg.vitals_transparency_mode = "opaque" if cfg.min_stat_alpha_floor >= 0.999 else "dynamic"
 		if g.has("numeric_only"):
 			cfg.numeric_only = bool(g["numeric_only"])
 		if g.has("stamina_fatigue_near_zero_cutoff"):
@@ -237,6 +246,12 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.status_inactive_r = cfg.status_color_r
 			cfg.status_inactive_g = cfg.status_color_g
 			cfg.status_inactive_b = cfg.status_color_b
+		## Row vs column follows tray edge (ignore legacy stack_direction conflicts).
+		var sax := str(cfg.status_anchor).to_lower()
+		if sax == "left" || sax == "right":
+			cfg.status_stack_direction = "vertical_up"
+		else:
+			cfg.status_stack_direction = "horizontal_left"
 
 	if d.has("fps_map"):
 		var fm := _as_dict(d["fps_map"])

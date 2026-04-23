@@ -170,6 +170,11 @@ var stat_text_low_b: int = 15
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
 
+## "dynamic" | "opaque" | "static". Mutually exclusive styles; legacy saves infer from `min_stat_alpha_floor` when unset.
+var vitals_transparency_mode: String = "dynamic"
+## When mode is static: uniform modulate.a for visible vitals (0..1). Ignored otherwise.
+var vitals_static_opacity: float = 0.75
+
 ## When true, vitals always use text labels (ignores per-stat radial in INI).
 var numeric_only: bool = false
 ## Clamp stamina/fatigue display to 0 when value is below this percent value.
@@ -223,6 +228,10 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		enabled = bool(cf.get_value("general", "enabled"))
 	if cf.has_section_key("general", "min_stat_alpha_floor"):
 		min_stat_alpha_floor = clampf(float(cf.get_value("general", "min_stat_alpha_floor")), 0.0, 1.0)
+	if cf.has_section_key("general", "vitals_transparency_mode"):
+		vitals_transparency_mode = str(cf.get_value("general", "vitals_transparency_mode"))
+	if cf.has_section_key("general", "vitals_static_opacity"):
+		vitals_static_opacity = clampf(float(cf.get_value("general", "vitals_static_opacity")), 0.0, 1.0)
 	if cf.has_section_key("general", "numeric_only"):
 		numeric_only = bool(cf.get_value("general", "numeric_only"))
 	if cf.has_section_key("general", "stamina_fatigue_near_zero_cutoff"):
@@ -259,6 +268,14 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			status_color_g = clampi(int(cf.get_value("status_icons", "color_g")), 0, 255)
 		if cf.has_section_key("status_icons", "color_b"):
 			status_color_b = clampi(int(cf.get_value("status_icons", "color_b")), 0, 255)
+		if cf.has_section_key("status_icons", "inactive_r"):
+			status_inactive_r = clampi(int(cf.get_value("status_icons", "inactive_r")), 0, 255)
+		if cf.has_section_key("status_icons", "inactive_g"):
+			status_inactive_g = clampi(int(cf.get_value("status_icons", "inactive_g")), 0, 255)
+		if cf.has_section_key("status_icons", "inactive_b"):
+			status_inactive_b = clampi(int(cf.get_value("status_icons", "inactive_b")), 0, 255)
+		if cf.has_section_key("status_icons", "inactive_alpha"):
+			status_inactive_alpha = clampf(float(cf.get_value("status_icons", "inactive_alpha")), 0.0, 1.0)
 
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
@@ -343,6 +360,8 @@ func apply_defaults() -> void:
 	fps_map_offset_x = 4.0
 	fps_map_offset_y = 4.0
 	min_stat_alpha_floor = 0.0
+	vitals_transparency_mode = "dynamic"
+	vitals_static_opacity = 0.75
 	numeric_only = false
 	stamina_fatigue_near_zero_cutoff = 1.0
 	vitals_anchor.clear()
@@ -385,6 +404,22 @@ func get_status_icon_color() -> Color:
 
 func get_status_inactive_icon_color() -> Color:
 	return Color8(status_inactive_r, status_inactive_g, status_inactive_b, 255)
+
+
+func get_vitals_transparency_mode() -> String:
+	var m := str(vitals_transparency_mode).strip_edges().to_lower()
+	if m == "opaque" || m == "solid":
+		return "opaque"
+	if m == "static":
+		return "static"
+	if m == "dynamic":
+		## Presets often set only `min_stat_alpha_floor` in INI (legacy).
+		if min_stat_alpha_floor >= 0.999:
+			return "opaque"
+		return "dynamic"
+	if min_stat_alpha_floor >= 0.999:
+		return "opaque"
+	return "dynamic"
 
 
 func get_vitals_strip_alignment() -> String:

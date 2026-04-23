@@ -6,22 +6,11 @@ const CFG := preload("res://SimpleHUD/Config.gd")
 const UserPreferencesScript := preload("res://SimpleHUD/UserPreferences.gd")
 const SimpleHUDPresetsReg := preload("res://SimpleHUD/PresetsRegistry.gd")
 
-const STAT_ROWS: Array = [
-	[CFG.STAT_HEALTH, "Health"],
-	[CFG.STAT_ENERGY, "Energy"],
-	[CFG.STAT_HYDRATION, "Hydration"],
-	[CFG.STAT_MENTAL, "Mental"],
-	[CFG.STAT_BODY_TEMP, "Temperature"],
-	[CFG.STAT_STAMINA, "Stamina"],
-	[CFG.STAT_FATIGUE, "Fatigue"],
-]
-
 var _menu_root: Control
 var _panel_root: Control
 
 var _auto_hide_cb: CheckBox
 var _anchor_option: OptionButton
-var _stack_direction_opt: OptionButton
 var _status_strip_align_opt: OptionButton
 var _padding_spin: SpinBox
 var _status_spacing_spin: SpinBox
@@ -36,11 +25,10 @@ var _ib_spin: SpinBox
 
 var _spacing_spin: SpinBox
 var _vitals_strip_align_opt: OptionButton
-var _numeric_hint: Label
-var _numeric_only_cb: CheckBox
+var _vitals_transparency_opt: OptionButton
+var _vitals_static_opacity_spin: SpinBox
+var _vitals_static_opacity_row: Control
 
-var _stat_pick: OptionButton
-var _batch_hint: Label
 var _stat_mode: OptionButton
 var _stat_anchor: OptionButton
 var _stat_padding: SpinBox
@@ -97,81 +85,73 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(back)
 
 	var vt := Label.new()
-	vt.text = "Vitals (per stat)"
+	vt.text = "Vitals"
 	vt.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(vt)
 
-	_spacing_spin = _add_labeled_spin(vbox, "Default spacing between vitals on same edge (px)", 0, 256, 1, 0)
+	_spacing_spin = _add_labeled_spin(vbox, "Spacing between vitals", 0, 256, 1, 0)
 	_spacing_spin.value_changed.connect(_on_spacing_strip_changed)
 
 	_vitals_strip_align_opt = _add_labeled_option(
 		vbox,
-		"Alignment (vitals along shared edge)",
-		["Leading (start → end)", "Center as a block", "Trailing (end ← start)"],
+		"Order on edge",
+		[
+			"Left to right",
+			"Centered on the edge",
+			"Right to left",
+		],
 	)
 	_vitals_strip_align_opt.item_selected.connect(_on_vitals_strip_align_changed)
-
-	_numeric_hint = Label.new()
-	_numeric_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_numeric_hint.add_theme_font_size_override("font_size", 12)
-	_numeric_hint.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
-	vbox.add_child(_numeric_hint)
-
-	_numeric_only_cb = CheckBox.new()
-	_numeric_only_cb.text = "Numeric-only vitals (preset lock; disables radial)"
-	_numeric_only_cb.focus_mode = Control.FOCUS_NONE
-	_numeric_only_cb.toggled.connect(_on_numeric_only_toggled)
-	vbox.add_child(_numeric_only_cb)
-
-	var stat_row := HBoxContainer.new()
-	stat_row.add_theme_constant_override("separation", 8)
-	var spl := Label.new()
-	spl.text = "Configure stat"
-	spl.custom_minimum_size.x = 120
-	stat_row.add_child(spl)
-	_stat_pick = OptionButton.new()
-	_stat_pick.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stat_pick.focus_mode = Control.FOCUS_ALL
-	_stat_pick.add_item("All stats (batch)")
-	for row in STAT_ROWS:
-		_stat_pick.add_item(str(row[1]))
-	_stat_pick.item_selected.connect(_on_stat_pick_changed)
-	stat_row.add_child(_stat_pick)
-	vbox.add_child(stat_row)
-
-	_batch_hint = Label.new()
-	_batch_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_batch_hint.text = "Batch mode on: values below apply to every vitals stat at once. The panel uses Health as a readout template."
-	_batch_hint.add_theme_font_size_override("font_size", 11)
-	_batch_hint.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
-	_batch_hint.visible = false
-	vbox.add_child(_batch_hint)
-
-	_stat_pick.select(1)
 
 	_stat_mode = _add_labeled_option(vbox, "Display", ["Numeric", "Radial"])
 	_stat_mode.item_selected.connect(_on_stat_field_changed)
 
 	_stat_anchor = _add_labeled_option(
 		vbox,
-		"Justification (screen edge)",
+		"Edge",
 		["Top", "Bottom", "Left", "Right"],
 	)
-	_stat_anchor.item_selected.connect(_on_stat_field_changed)
+	_stat_anchor.item_selected.connect(_on_vitals_anchor_changed)
+	_refresh_vitals_order_option_items("leading")
 
-	_stat_padding = _add_labeled_spin(vbox, "Inset from screen edge (px)", 0, 512, 1, 0)
+	_stat_padding = _add_labeled_spin(vbox, "Edge Padding (px)", 0, 512, 1, 0)
 	_stat_padding.value_changed.connect(_on_stat_field_changed_val)
-	_stat_spacing = _add_labeled_spin(vbox, "Spacing to next vital on same edge (px)", 0, 256, 1, 0)
+	_stat_spacing = _add_labeled_spin(vbox, "Spacing to next vital", 0, 256, 1, 0)
 	_stat_spacing.value_changed.connect(_on_stat_field_changed_val)
-	_stat_scale = _add_labeled_spin(vbox, "Scale (% of default)", 25, 400, 5, 0)
+	_stat_scale = _add_labeled_spin(vbox, "Scale (%)", 25, 400, 5, 0)
 	_stat_scale.value_changed.connect(_on_stat_field_changed_val)
-	_stat_threshold = _add_labeled_spin(vbox, "Show when % ≤ threshold (101 = always)", 0, 101, 1, 0)
+	_stat_threshold = _add_labeled_spin(vbox, "Minimum display threshold", 0, 101, 1, 0)
 	_stat_threshold.value_changed.connect(_on_stat_field_changed_val)
+
+	_vitals_transparency_opt = _add_labeled_option(
+		vbox,
+		"Transparency",
+		["Dynamic", "Solid", "Fixed opacity"],
+	)
+	_vitals_transparency_opt.item_selected.connect(_on_vitals_transparency_changed)
+
+	var static_row := HBoxContainer.new()
+	static_row.add_theme_constant_override("separation", 8)
+	var sol := Label.new()
+	sol.text = "Opacity (%)"
+	sol.custom_minimum_size.x = 160
+	static_row.add_child(sol)
+	_vitals_static_opacity_spin = SpinBox.new()
+	_vitals_static_opacity_spin.min_value = 1
+	_vitals_static_opacity_spin.max_value = 100
+	_vitals_static_opacity_spin.step = 1
+	_vitals_static_opacity_spin.rounded = true
+	_vitals_static_opacity_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_vitals_static_opacity_spin.focus_mode = Control.FOCUS_ALL
+	_vitals_static_opacity_spin.value_changed.connect(_on_vitals_static_opacity_changed)
+	static_row.add_child(_vitals_static_opacity_spin)
+	vbox.add_child(static_row)
+	_vitals_static_opacity_row = static_row
 
 	_grad_mode = _add_labeled_option(
 		vbox,
-		"Text / arc colors",
-		["Default preset", "White only", "Custom gradient"],
+		"Vital colors",
+		["Preset default", "White only", "Custom gradient"],
 	)
 	_grad_mode.item_selected.connect(_on_grad_mode_changed)
 
@@ -179,14 +159,9 @@ func build(vbox: VBoxContainer) -> void:
 	_grad_custom.add_theme_constant_override("separation", 6)
 	vbox.add_child(_grad_custom)
 
-	var th_lbl := Label.new()
-	th_lbl.text = "Custom gradient (percent of bar / value)"
-	th_lbl.add_theme_font_size_override("font_size", 13)
-	_grad_custom.add_child(th_lbl)
-
-	_g_hi_pct = _add_labeled_spin(_grad_custom, "High band starts at %", 0, 100, 1, 0)
+	_g_hi_pct = _add_labeled_spin(_grad_custom, "High color from this % of value upward", 0, 100, 1, 0)
 	_g_hi_pct.value_changed.connect(_on_stat_field_changed_val)
-	_g_mid_pct = _add_labeled_spin(_grad_custom, "Mid blend at %", 0, 100, 1, 0)
+	_g_mid_pct = _add_labeled_spin(_grad_custom, "Blend mid color near this % of value", 0, 100, 1, 0)
 	_g_mid_pct.value_changed.connect(_on_stat_field_changed_val)
 
 	var hi_rgb := Label.new()
@@ -234,16 +209,9 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(HSeparator.new())
 
 	var title := Label.new()
-	title.text = "Status ailments"
+	title.text = "Ailment icons"
 	title.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(title)
-
-	var hint := Label.new()
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.text = "Icons for bleeding, dehydration, etc. Saved to user://simplehud_preferences.json."
-	hint.add_theme_font_size_override("font_size", 12)
-	hint.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
-	vbox.add_child(hint)
 
 	_auto_hide_cb = CheckBox.new()
 	_auto_hide_cb.text = "Hide tray when no active ailments"
@@ -251,17 +219,10 @@ func build(vbox: VBoxContainer) -> void:
 	_auto_hide_cb.toggled.connect(_on_auto_hide_toggled)
 	vbox.add_child(_auto_hide_cb)
 
-	var status_mode_hint := Label.new()
-	status_mode_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_mode_hint.text = "When unchecked (show all icons): inactive ailments use “Inactive ailment RGB” and “Inactive opacity”. When checked: only active ailments are shown (inflicted-only)."
-	status_mode_hint.add_theme_font_size_override("font_size", 11)
-	status_mode_hint.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
-	vbox.add_child(status_mode_hint)
-
 	var anchor_row := HBoxContainer.new()
 	anchor_row.add_theme_constant_override("separation", 8)
 	var anchor_lbl := Label.new()
-	anchor_lbl.text = "Justification"
+	anchor_lbl.text = "Edge"
 	anchor_lbl.custom_minimum_size.x = 120
 	anchor_row.add_child(anchor_lbl)
 	_anchor_option = OptionButton.new()
@@ -275,27 +236,26 @@ func build(vbox: VBoxContainer) -> void:
 	anchor_row.add_child(_anchor_option)
 	vbox.add_child(anchor_row)
 
-	_stack_direction_opt = _add_labeled_option(
-		vbox,
-		"Stack direction",
-		["Vertical (along edge)", "Horizontal (along edge)"],
-	)
-	_stack_direction_opt.item_selected.connect(_on_status_field_changed)
-
-	_status_strip_align_opt = _add_labeled_option(
-		vbox,
-		"Alignment (icons along strip)",
-		["Leading (start → end)", "Center as a block", "Trailing (end ← start)"],
-	)
+	var spread_row := HBoxContainer.new()
+	spread_row.add_theme_constant_override("separation", 8)
+	var spread_lbl := Label.new()
+	spread_lbl.text = "Icon order on edge"
+	spread_lbl.custom_minimum_size.x = 160
+	spread_row.add_child(spread_lbl)
+	_status_strip_align_opt = OptionButton.new()
+	_status_strip_align_opt.focus_mode = Control.FOCUS_ALL
+	_status_strip_align_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spread_row.add_child(_status_strip_align_opt)
+	vbox.add_child(spread_row)
 	_status_strip_align_opt.item_selected.connect(_on_status_field_changed)
 
-	_padding_spin = _add_labeled_spin(vbox, "Inset from screen edge (px)", 0, 512, 1, 0)
+	_padding_spin = _add_labeled_spin(vbox, "Edge padding (px)", 0, 512, 1, 0)
 	_padding_spin.value_changed.connect(_on_padding_changed)
 
-	_status_spacing_spin = _add_labeled_spin(vbox, "Spacing between ailment icons (px)", 0, 64, 1, 0)
+	_status_spacing_spin = _add_labeled_spin(vbox, "Spacing between (px)", 0, 64, 1, 0)
 	_status_spacing_spin.value_changed.connect(_on_status_spacing_changed)
 
-	_scale_spin = _add_labeled_spin(vbox, "Scale (% of default)", 25, 400, 5, 0)
+	_scale_spin = _add_labeled_spin(vbox, "Scale (%)", 25, 400, 5, 0)
 	_scale_spin.value_changed.connect(_on_scale_changed)
 
 	var rgb_title := Label.new()
@@ -441,6 +401,49 @@ func _anchor_key_from_index(idx: int) -> String:
 			return "right"
 
 
+## Top/Bottom → horizontal strip; Left/Right → vertical strip (matches Main.status_stack_direction).
+func _ailment_anchor_is_horizontal() -> bool:
+	var i := clampi(_anchor_option.selected, 0, 3)
+	return i == 0 or i == 1
+
+
+func _refresh_ailment_spread_option_items(strip_align_from_cfg: String) -> void:
+	if _status_strip_align_opt == null:
+		return
+	_status_strip_align_opt.clear()
+	if _ailment_anchor_is_horizontal():
+		_status_strip_align_opt.add_item("Left to right")
+		_status_strip_align_opt.add_item("Centered on the edge")
+		_status_strip_align_opt.add_item("Right to left")
+	else:
+		_status_strip_align_opt.add_item("Top to bottom")
+		_status_strip_align_opt.add_item("Centered on the edge")
+		_status_strip_align_opt.add_item("Bottom to top")
+	_status_strip_align_opt.select(_status_strip_align_sel_from_cfg(str(strip_align_from_cfg)))
+
+
+func _vitals_anchor_is_horizontal() -> bool:
+	var i := clampi(_stat_anchor.selected, 0, 3)
+	return i == 0 or i == 1
+
+
+func _refresh_vitals_order_option_items(strip_align_from_cfg: String) -> void:
+	if _vitals_strip_align_opt == null:
+		return
+	_vitals_strip_align_opt.set_block_signals(true)
+	_vitals_strip_align_opt.clear()
+	if _vitals_anchor_is_horizontal():
+		_vitals_strip_align_opt.add_item("Left to right")
+		_vitals_strip_align_opt.add_item("Centered on the edge")
+		_vitals_strip_align_opt.add_item("Right to left")
+	else:
+		_vitals_strip_align_opt.add_item("Top to bottom")
+		_vitals_strip_align_opt.add_item("Centered on the edge")
+		_vitals_strip_align_opt.add_item("Bottom to top")
+	_vitals_strip_align_opt.select(_vitals_strip_align_sel_from_cfg(str(strip_align_from_cfg)))
+	_vitals_strip_align_opt.set_block_signals(false)
+
+
 func _vitals_strip_align_sel_from_cfg(key: String) -> int:
 	match UserPreferencesScript.normalize_strip_alignment(str(key)):
 		"center":
@@ -481,21 +484,6 @@ func _status_strip_align_key_from_sel(sel: int) -> String:
 			return "trailing"
 
 
-func _stack_dir_sel(dir: String) -> int:
-	return 1 if str(dir) == "horizontal_left" else 0
-
-
-func _stack_dir_from_sel(sel: int) -> String:
-	return "horizontal_left" if clampi(sel, 0, 1) == 1 else "vertical_up"
-
-
-func _editor_template_stat_id() -> StringName:
-	var sel := _stat_pick.selected
-	if sel <= 0:
-		return CFG.STAT_HEALTH
-	return STAT_ROWS[sel - 1][0]
-
-
 func sync_from_main() -> void:
 	_ui_sync = true
 	var m := _simplehud_main()
@@ -508,8 +496,7 @@ func sync_from_main() -> void:
 	var sd: Dictionary = m.get_status_tray_settings_for_ui()
 	_auto_hide_cb.set_pressed_no_signal(bool(sd.get("auto_hide", false)))
 	_anchor_option.select(_anchor_index_from_key(str(sd.get("anchor", "right"))))
-	_stack_direction_opt.select(_stack_dir_sel(str(sd.get("stack_direction", "vertical_up"))))
-	_status_strip_align_opt.select(_status_strip_align_sel_from_cfg(str(sd.get("strip_alignment", "trailing"))))
+	_refresh_ailment_spread_option_items(str(sd.get("strip_alignment", "trailing")))
 	_padding_spin.set_value_no_signal(float(sd.get("padding_px", 5.0)))
 	_status_spacing_spin.set_value_no_signal(float(sd.get("spacing_px", 2.0)))
 	_scale_spin.set_value_no_signal(float(sd.get("scale_pct", 100.0)))
@@ -523,9 +510,20 @@ func sync_from_main() -> void:
 
 	var strip: Dictionary = m.get_vitals_strip_settings_for_ui()
 	_spacing_spin.set_value_no_signal(float(strip.get("spacing_px", 12.0)))
-	_vitals_strip_align_opt.select(_vitals_strip_align_sel_from_cfg(str(strip.get("strip_alignment", "leading"))))
-	var num_only := bool(strip.get("numeric_only", false))
-	_numeric_only_cb.set_pressed_no_signal(num_only)
+	_refresh_vitals_order_option_items(str(strip.get("strip_alignment", "leading")))
+
+	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
+	_vitals_transparency_opt.set_block_signals(true)
+	match vm:
+		"opaque":
+			_vitals_transparency_opt.select(1)
+		"static":
+			_vitals_transparency_opt.select(2)
+		_:
+			_vitals_transparency_opt.select(0)
+	_vitals_transparency_opt.set_block_signals(false)
+	_vitals_static_opacity_spin.set_value_no_signal(float(strip.get("vitals_static_opacity_pct", 75.0)))
+	_update_vitals_static_opacity_row_visibility()
 
 	if m.has_method(&"get_simplehud_preset_dropdown_index_for_active"):
 		_preset_option.set_block_signals(true)
@@ -540,15 +538,9 @@ func _sync_stat_editor_panel() -> void:
 	var m := _simplehud_main()
 	if m == null:
 		return
-	_batch_hint.visible = _stat_pick.selected == 0
 
-	var sid := _editor_template_stat_id()
-	var d: Dictionary = m.get_stat_settings_for_ui(sid)
+	var d: Dictionary = m.get_stat_settings_for_ui(CFG.STAT_HEALTH)
 	var num_only := bool(d.get("numeric_only_global", false))
-	if num_only:
-		_numeric_hint.text = "Numeric-only is on (common on TextNumeric* VMZ presets). Uncheck “Numeric-only vitals” or choose Radial to clear it."
-	else:
-		_numeric_hint.text = ""
 
 	_stat_mode.set_item_disabled(1, num_only)
 	var want_radial := bool(d.get("radial", true))
@@ -558,6 +550,7 @@ func _sync_stat_editor_panel() -> void:
 		_stat_mode.select(1 if want_radial else 0)
 
 	_stat_anchor.select(_anchor_index_from_key(str(d.get("anchor", "bottom"))))
+	_refresh_vitals_order_option_items(_vitals_strip_align_key_from_sel(_vitals_strip_align_opt.selected))
 	_stat_padding.set_value_no_signal(float(d.get("padding_px", 8.0)))
 	_stat_spacing.set_value_no_signal(float(d.get("spacing_px", 12.0)))
 	_stat_scale.set_value_no_signal(float(d.get("scale_pct", 100.0)))
@@ -636,7 +629,6 @@ func _apply_status_from_ui() -> void:
 		int(_r_spin.value),
 		int(_g_spin.value),
 		int(_b_spin.value),
-		_stack_dir_from_sel(_stack_direction_opt.selected),
 		_status_strip_align_key_from_sel(_status_strip_align_opt.selected),
 		int(_ir_spin.value),
 		int(_ig_spin.value),
@@ -646,18 +638,6 @@ func _apply_status_from_ui() -> void:
 
 func _on_status_numeric_field_changed(_v: float) -> void:
 	_apply_status_from_ui()
-
-
-func _on_numeric_only_toggled(_on: bool) -> void:
-	if _ui_sync:
-		return
-	var mm := _simplehud_main()
-	if mm == null:
-		return
-	mm.apply_numeric_only_from_ui(_numeric_only_cb.button_pressed)
-	_ui_sync = true
-	_sync_stat_editor_panel()
-	_ui_sync = false
 
 
 func _apply_strip_from_ui() -> void:
@@ -670,6 +650,37 @@ func _apply_strip_from_ui() -> void:
 		float(_spacing_spin.value),
 		_vitals_strip_align_key_from_sel(_vitals_strip_align_opt.selected),
 	)
+
+
+func _update_vitals_static_opacity_row_visibility() -> void:
+	if _vitals_static_opacity_row != null:
+		_vitals_static_opacity_row.visible = _vitals_transparency_opt.selected == 2
+
+
+func _on_vitals_transparency_changed(_idx: int) -> void:
+	_update_vitals_static_opacity_row_visibility()
+	_push_vitals_transparency_to_main()
+
+
+func _on_vitals_static_opacity_changed(_v: float) -> void:
+	_push_vitals_transparency_to_main()
+
+
+func _push_vitals_transparency_to_main() -> void:
+	if _ui_sync:
+		return
+	var mm := _simplehud_main()
+	if mm == null || !(mm as Object).has_method(&"apply_vitals_transparency_from_ui"):
+		return
+	var mk := "dynamic"
+	match _vitals_transparency_opt.selected:
+		1:
+			mk = "opaque"
+		2:
+			mk = "static"
+		_:
+			mk = "dynamic"
+	(mm as Node).call(&"apply_vitals_transparency_from_ui", mk, float(_vitals_static_opacity_spin.value))
 
 
 func _build_gradient_dict_for_custom() -> Dictionary:
@@ -711,12 +722,7 @@ func _apply_stat_from_ui() -> void:
 	if gmode == "custom":
 		stat_dict["gradient"] = _build_gradient_dict_for_custom()
 
-	if _stat_pick.selected == 0:
-		mm.apply_stat_settings_to_all_from_ui(stat_dict)
-	else:
-		var idx := _stat_pick.selected - 1
-		var sid: StringName = STAT_ROWS[idx][0]
-		mm.apply_stat_settings_from_ui(sid, stat_dict)
+	mm.apply_stat_settings_to_all_from_ui(stat_dict)
 
 
 func _on_auto_hide_toggled(_on: bool) -> void:
@@ -724,6 +730,12 @@ func _on_auto_hide_toggled(_on: bool) -> void:
 
 
 func _on_anchor_selected(_idx: int) -> void:
+	if _ui_sync:
+		return
+	var preserve_key := "trailing"
+	if _status_strip_align_opt != null && _status_strip_align_opt.item_count > 0:
+		preserve_key = _status_strip_align_key_from_sel(_status_strip_align_opt.selected)
+	_refresh_ailment_spread_option_items(preserve_key)
 	_apply_status_from_ui()
 
 
@@ -745,6 +757,14 @@ func _on_spacing_strip_changed(_v: float) -> void:
 
 func _on_vitals_strip_align_changed(_idx: int) -> void:
 	_apply_strip_from_ui()
+
+
+func _on_vitals_anchor_changed(idx: int) -> void:
+	var preserve_key := "leading"
+	if _vitals_strip_align_opt != null && _vitals_strip_align_opt.item_count > 0:
+		preserve_key = _vitals_strip_align_key_from_sel(_vitals_strip_align_opt.selected)
+	_refresh_vitals_order_option_items(preserve_key)
+	_on_stat_field_changed(idx)
 
 
 func _on_preset_selected(idx: int) -> void:
@@ -778,13 +798,6 @@ func _on_status_spacing_changed(_v: float) -> void:
 
 func _on_inactive_rgb_changed(_v: float) -> void:
 	_apply_status_from_ui()
-
-
-func _on_stat_pick_changed(_idx: int) -> void:
-	_ui_sync = true
-	_batch_hint.visible = _stat_pick.selected == 0
-	_sync_stat_editor_panel()
-	_ui_sync = false
 
 
 func _on_stat_field_changed(_idx: int) -> void:

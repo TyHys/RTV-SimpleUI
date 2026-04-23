@@ -8,4 +8,4 @@ extends "res://SimpleHUD/SimpleHUDConfigCore.gd"
 ##   injecting a visual preset (subclass of the core) without touching the core implementation.
 ##
 ## Players should not edit GDScript; use `user://simplehud_preferences.json` (see
-## `simplehud_preferences.example.json` for a short starter template).
+## `simplehud_preferences.example.json`; full merge schema in `UserPreferences.gd`).

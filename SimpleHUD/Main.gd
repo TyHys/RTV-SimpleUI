@@ -30,6 +30,15 @@ var _logged_overlay_missing_refresh: bool = false
 ## Main menu (`Menu.tscn`) SimpleHUD overlay; used to close on Escape and from Return.
 var _simplehud_main_menu_scene: Control = null
 var _simplehud_main_menu_panel_layer: Control = null
+var _simplehud_menu_inner: Control = null
+
+## Menu card: was fixed 512×704 px so the dark fill was narrower than long label rows (~674 px). Size from viewport instead.
+const SIMPLEHUD_MENU_WIDTH_FRAC := 0.52
+const SIMPLEHUD_MENU_MIN_WIDTH := 700.0
+const SIMPLEHUD_MENU_MAX_WIDTH := 980.0
+const SIMPLEHUD_MENU_HEIGHT_FRAC := 0.72
+const SIMPLEHUD_MENU_MIN_HEIGHT := 520.0
+const SIMPLEHUD_MENU_MAX_HEIGHT := 920.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -53,6 +62,45 @@ func _unhandled_input(ev: InputEvent) -> void:
 	var vp := get_viewport()
 	if vp != null:
 		vp.set_input_as_handled()
+
+
+func _layout_simplehud_menu_inner(inner: Control, content_min_width: float = -1.0) -> void:
+	if inner == null || !is_instance_valid(inner):
+		return
+	var sz := Vector2(1920, 1080)
+	var vp := inner.get_viewport()
+	if vp != null:
+		sz = vp.get_visible_rect().size
+	var w := clampf(sz.x * SIMPLEHUD_MENU_WIDTH_FRAC, SIMPLEHUD_MENU_MIN_WIDTH, SIMPLEHUD_MENU_MAX_WIDTH)
+	if content_min_width > 0.0:
+		## Margins (32) + scrollbar / rounding so the dark card is at least as wide as the row labels + controls.
+		w = clampf(
+			maxf(w, content_min_width + 40.0),
+			SIMPLEHUD_MENU_MIN_WIDTH,
+			SIMPLEHUD_MENU_MAX_WIDTH,
+		)
+	var h := clampf(sz.y * SIMPLEHUD_MENU_HEIGHT_FRAC, SIMPLEHUD_MENU_MIN_HEIGHT, SIMPLEHUD_MENU_MAX_HEIGHT)
+	var hw := w * 0.5
+	var hh := h * 0.5
+	inner.set_anchors_preset(Control.PRESET_CENTER)
+	inner.offset_left = -hw
+	inner.offset_right = hw
+	inner.offset_top = -hh
+	inner.offset_bottom = hh
+
+
+## Game build uses `call_deferred(StringName, ...)` only — Callable form is a parse error on some exports.
+func _deferred_relayout_simplehud_menu_inner() -> void:
+	var sc := _simplehud_main_menu_scene
+	if sc == null:
+		return
+	var vb: Variant = sc.get_meta(&"_simplehud_settings_vbox", null)
+	if vb == null || !is_instance_valid(vb) || !(vb is VBoxContainer):
+		return
+	if !is_instance_valid(_simplehud_menu_inner):
+		return
+	var mw := (vb as VBoxContainer).get_combined_minimum_size().x
+	_layout_simplehud_menu_inner(_simplehud_menu_inner, mw)
 
 
 ## Called by Return, Escape (`ui_cancel`), and clicking the dim backdrop.
@@ -221,11 +269,10 @@ func _try_install_simplehud_main_menu() -> void:
 	var inner := Control.new()
 	inner.name = "SimpleHUDInner"
 	inner.mouse_filter = Control.MOUSE_FILTER_STOP
+	inner.clip_contents = true
 	inner.set_anchors_preset(Control.PRESET_CENTER)
-	inner.offset_left = -256.0
-	inner.offset_top = -352.0
-	inner.offset_right = 256.0
-	inner.offset_bottom = 352.0
+	_simplehud_menu_inner = inner
+	_layout_simplehud_menu_inner(inner)
 	panel.add_child(inner)
 	var bg := ColorRect.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -251,6 +298,18 @@ func _try_install_simplehud_main_menu() -> void:
 	_simplehud_main_menu_scene = sc as Control
 	_simplehud_main_menu_panel_layer = panel
 	panel_ui.build(vbox)
+	call_deferred("_deferred_relayout_simplehud_menu_inner")
+	var vp_resize: Viewport = sc.get_viewport()
+	if vp_resize != null && !bool(sc.get_meta(&"_simplehud_menu_vp_resize_connected", false)):
+		sc.set_meta(&"_simplehud_menu_vp_resize_connected", true)
+		vp_resize.size_changed.connect(
+			func () -> void:
+				var mw := -1.0
+				var vb: Variant = sc.get_meta(&"_simplehud_settings_vbox", null)
+				if vb is VBoxContainer && is_instance_valid(vb):
+					mw = (vb as VBoxContainer).get_combined_minimum_size().x
+				_layout_simplehud_menu_inner(_simplehud_menu_inner, mw)
+		)
 	if SIMPLEHUD_DIAG_LOG && SIMPLEHUD_MENU_PANEL_DIAG:
 		log_menu_panel_diag(
 			"installed: menu_scene=%s panel_index_in_scene=%s vbox_children=%s"
@@ -259,10 +318,13 @@ func _try_install_simplehud_main_menu() -> void:
 		_dump_simplehud_menu_panel_layout("install_immediate")
 	sc.set_meta(&"_simplehud_main_menu_installed", true)
 	sc.set_meta(&"_simplehud_panel_controller", panel_ui)
+	sc.set_meta(&"_simplehud_settings_vbox", vbox)
 	simple_btn.pressed.connect(
 		func () -> void:
 			if sc.has_method(&"PlayClick"):
 				sc.call(&"PlayClick")
+			_layout_simplehud_menu_inner(_simplehud_menu_inner)
+			call_deferred("_deferred_relayout_simplehud_menu_inner")
 			panel.show()
 			var main_blk: Node = sc.get_node_or_null("Main")
 			if main_blk != null:
@@ -306,7 +368,6 @@ func apply_status_tray_settings_from_ui(
 	r: int,
 	g: int,
 	b: int,
-	stack_direction: String,
 	strip_align_key: String,
 	inactive_r: int,
 	inactive_g: int,
@@ -317,7 +378,14 @@ func apply_status_tray_settings_from_ui(
 		_cfg.status_mode = "inflicted_only"
 	else:
 		_cfg.status_mode = "always"
-	_cfg.status_anchor = UserPreferencesScript.normalize_anchor(anchor_key)
+	var ax := UserPreferencesScript.normalize_anchor(anchor_key)
+	_cfg.status_anchor = ax
+	## Top/Bottom tray = horizontal row; Left/Right = vertical column (no separate “stack mode” control).
+	match ax:
+		"left", "right":
+			_cfg.status_stack_direction = "vertical_up"
+		_:
+			_cfg.status_stack_direction = "horizontal_left"
 	_cfg.status_padding_px = clampf(padding_px, 0.0, 512.0)
 	_cfg.status_spacing_px = clampf(spacing_px, 0.0, 64.0)
 	_cfg.status_scale_pct = clampf(scale_pct, 25.0, 400.0)
@@ -328,7 +396,6 @@ func apply_status_tray_settings_from_ui(
 	_cfg.status_inactive_r = clampi(inactive_r, 0, 255)
 	_cfg.status_inactive_g = clampi(inactive_g, 0, 255)
 	_cfg.status_inactive_b = clampi(inactive_b, 0, 255)
-	_cfg.status_stack_direction = str(stack_direction)
 	_cfg.status_strip_alignment = UserPreferencesScript.normalize_status_strip_alignment(strip_align_key)
 	UserPreferencesScript.persist_preferences_json(_cfg)
 	log_diag(
@@ -350,19 +417,33 @@ func apply_status_tray_settings_from_ui(
 	refresh_hud_layout()
 
 
-func apply_numeric_only_from_ui(on: bool) -> void:
-	_cfg.numeric_only = on
-	UserPreferencesScript.persist_preferences_json(_cfg)
-	log_diag("general.numeric_only set to %s (affects all radial toggles)" % on)
-	refresh_hud_layout()
-
-
 func get_vitals_strip_settings_for_ui() -> Dictionary:
 	return {
 		"spacing_px": float(_cfg.vitals_spacing_default_px),
 		"strip_alignment": str(_cfg.vitals_strip_alignment),
-		"numeric_only": bool(_cfg.numeric_only),
+		"vitals_transparency_mode": _cfg.get_vitals_transparency_mode(),
+		"vitals_static_opacity_pct": clampf(float(_cfg.vitals_static_opacity), 0.0, 1.0) * 100.0,
 	}
+
+
+func apply_vitals_transparency_from_ui(mode_key: String, static_opacity_pct: float) -> void:
+	match mode_key:
+		"opaque":
+			_cfg.vitals_transparency_mode = "opaque"
+			_cfg.min_stat_alpha_floor = 1.0
+		"static":
+			_cfg.vitals_transparency_mode = "static"
+			_cfg.min_stat_alpha_floor = 0.0
+			_cfg.vitals_static_opacity = clampf(static_opacity_pct / 100.0, 0.01, 1.0)
+		_:
+			_cfg.vitals_transparency_mode = "dynamic"
+			_cfg.min_stat_alpha_floor = 0.0
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	log_diag(
+		"vitals transparency mode=%s static_opacity=%.2f floor=%.2f"
+		% [_cfg.get_vitals_transparency_mode(), _cfg.vitals_static_opacity, _cfg.min_stat_alpha_floor]
+	)
+	refresh_hud_layout()
 
 
 func apply_vitals_strip_settings_from_ui(spacing_px: float, strip_alignment_key: String = "") -> void:
@@ -419,7 +500,7 @@ func apply_simplehud_preset(preset_id: String) -> bool:
 	(nu as RefCounted).call(&"apply_full_preset_defaults")
 	_cfg = nu
 	_cfg.set_meta(&"simplehud_active_preset", preset_id)
-	UserPreferencesScript.merge_into(_cfg)
+	## Skipping merge_into(): saved preferences would overwrite the preset; persist this as the new baseline instead.
 	UserPreferencesScript.persist_preferences_json(_cfg)
 	if is_instance_valid(_overlay):
 		_overlay.apply_live_config(_cfg)
@@ -482,19 +563,8 @@ func _maybe_disable_numeric_only_for_radial(stat_dict: Dictionary) -> void:
 	if bool(stat_dict.get("radial", false)) && _cfg.numeric_only:
 		_cfg.numeric_only = false
 		log_diag(
-			"general.numeric_only was true (common on TextNumeric* presets); cleared so radial vitals can render. Re-enable via HUD checkbox if you want text-only."
+			"general.numeric_only was true (e.g. TextNumeric preset); cleared so radial vitals can render."
 		)
-
-
-func apply_stat_settings_from_ui(stat_id: StringName, stat_dict: Dictionary) -> void:
-	_apply_stat_dict_to_cfg(stat_id, stat_dict)
-	_maybe_disable_numeric_only_for_radial(stat_dict)
-	UserPreferencesScript.persist_preferences_json(_cfg)
-	log_diag(
-		"Stat %s: radial_cfg=%s numeric_only=%s get_radial=%s"
-		% [stat_id, _cfg.radial.get(stat_id, false), _cfg.numeric_only, _cfg.get_radial(stat_id)]
-	)
-	refresh_hud_layout()
 
 
 func apply_stat_settings_to_all_from_ui(stat_dict: Dictionary) -> void:

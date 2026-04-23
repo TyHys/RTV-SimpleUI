@@ -1,5 +1,5 @@
 {
-  "_readme": "Rename/copy this file to user://simplehud_preferences.json (Godot user data folder). Only sections you include are merged; omit the rest. Full key list: simplehud_preferences.full.example.json",
+  "_readme": "Copy to user://simplehud_preferences.json (Godot user data folder). Only keys you set are merged. Full schema: UserPreferences.gd — merge_into(), persist_preferences_json(), and _build_* helpers.",
   "vitals_layout": {
     "spacing_px": 12,
     "strip_alignment": "leading",

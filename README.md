@@ -9,9 +9,7 @@ This README is for maintainers/contributors, not end users.
 - `mod.txt`  
   Mod metadata and autoload registration (`SimpleHUDMain`).
 - `SimpleHUD/Main.gd`  
-  Runtime entrypoint; binds to vanilla HUD, reads preferences, drives overlay updates; replaces `Scripts/Interface.gd` with `SimpleHUD/Interface.gd` (inventory **HUD** tab).
-- `SimpleHUD/Interface.gd`  
-  Extends vanilla `Interface.gd`; adds the **HUD** tools-column panel (status ailment tray settings). **Mod conflict:** another mod that also replaces `Interface.gd` (e.g. Debug Mode) will overwrite this unless you merge scripts or adjust load order.
+  Runtime entrypoint (autoload); binds to vanilla HUD, reads preferences, drives overlay; installs the **SimpleHUD** panel on the main menu (`Menu.tscn`).
 - `SimpleHUD/HudOverlay.gd`  
   Builds and updates vitals/status UI, layout/positioning, alpha behavior.
 - `SimpleHUD/SimpleHUDConfigCore.gd`  
@@ -21,17 +19,17 @@ This README is for maintainers/contributors, not end users.
 - `SimpleHUD/widgets/*`  
   UI widgets (`StatWidget`, `RadialStat`, `StatusTray`).
 - `presets/<PresetName>/Config.gd`  
-  Thin preset classes (subclass `SimpleHUDConfigCore.gd`). Build injects one as `SimpleHUD/Config.gd` per VMZ.
+  Thin preset classes (subclass `SimpleHUDConfigCore.gd`). Build copies all into `SimpleHUD/preset_configs/` for the in-game preset list and injects the default preset as `SimpleHUD/Config.gd`.
 - `SimpleHUD.default.ini`  
   Packaged default INI (included in VMZ build).
 - `build_simplehud_vmz.sh`  
-  Builds `mod/SimpleUI-<PresetName>.vmz` per folder under `presets/`.
+  Builds `mod/SimpleUI.vmz` (default preset: `RadialPlainNoHide`).
 
 ## Preset Model
 
 Presets override `apply_defaults()` and/or `_embedded_defaults_ini()` (fallback INI string) via small scripts that extend `SimpleHUDConfigCore.gd`. Named variants include `TextNumericPlain`, `TextNumericColor`, `RadialPlain`, `RadialColor`, and `*NoHide` builds.
 
-Players tune HUD layout and colors with optional `user://simplehud_preferences.json` (see `simplehud_preferences.example.json` for a short template and `simplehud_preferences.full.example.json` for every key).
+Players tune HUD layout and colors with optional `user://simplehud_preferences.json` (see `simplehud_preferences.example.json`; exhaustive merge keys live in `UserPreferences.gd`).
 
 ## Critical Config Behavior
 
@@ -73,9 +71,9 @@ From `SimpleHUD/`:
 
 Build output (`mod/`):
 
-- `SimpleUI-<PresetName>.vmz` — one archive per preset under `presets/`.
+- `SimpleUI.vmz`
 
-Each VMZ bundles only:
+Each archive bundles only:
 
 - `mod.txt`
 - `SimpleHUD.default.ini`
@@ -83,7 +81,7 @@ Each VMZ bundles only:
 
 Documentation under `Docs/` stays in the repo only—it is **not** copied into VMZs.
 
-The matching `presets/<PresetName>/Config.gd` is copied onto `SimpleHUD/Config.gd` when staging each zip (preset folders themselves are **not** included).
+The default `presets/<DefaultPreset>/Config.gd` is copied onto `SimpleHUD/Config.gd`; every preset script is copied into `SimpleHUD/preset_configs/` (the `presets/` folders themselves are **not** included).
 
 ## Development Workflow
 

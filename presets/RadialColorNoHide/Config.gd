@@ -27,7 +27,7 @@ radial=true
 visible_threshold=101.0
 radial=true
 [status_icons]
-mode=\"inflicted_only\"
+mode=\"always\"
 corner=\"bottom_right\"
 spacing_px=2
 icon_scale=0.12
@@ -35,9 +35,13 @@ icon_size_px=32
 stack_direction=\"vertical_up\"
 margin_right=5
 margin_bottom=5
-color_r=120
+color_r=150
 color_g=0
 color_b=0
+inactive_r=255
+inactive_g=255
+inactive_b=255
+inactive_alpha=0.25
 [fps_map]
 alpha=0.5
 scale=0.81
