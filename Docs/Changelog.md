@@ -17,6 +17,11 @@ All notable changes to `SimpleHUD` are documented in this file.
 - Ensured compass/crosshair per-frame work is fully gated by feature toggles so disabled beta features do not run tick-time placement or update logic.
 - Added layout-level guards to keep disabled compass/crosshair widgets hidden without running their expensive visibility/measurement paths.
 
+### Fixed (vitals layout / alignment)
+- Fixed vitals left/right column alignment so `Centered on edge` and trailing edge placement are computed from the active strip height reliably across resolutions.
+- Fixed edge-case relayout caching where changes in active vitals participation could leave stale placement (including top-left fallback-like behavior).
+- Improved vitals layout diagnostics (throttled, `godot.log` only) to include viewport/alignment/placement context for center and trailing paths.
+
 ## [1.0.4] - 2026-04-23
 
 ### Changed (runtime performance)

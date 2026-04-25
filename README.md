@@ -19,6 +19,8 @@ The old multi-VMZ-per-preset distribution model is deprecated.
 - Compass and Dynamic Crosshair are now marked as beta in the settings UI with italic yellow `*Beta` labels.
 - Crosshair rendering is optimized to reduce draw/update overhead during gameplay.
 - Disabled beta chrome features (Compass/Crosshair) now fully skip per-frame update paths to minimize any performance impact on the main HUD feature set.
+- Vitals edge alignment fixes improve left/right `Centered on edge` and trailing placement consistency at different resolutions.
+- Vitals layout now reflows reliably when active visible vitals change, preventing stale top-left placement in edge cases.
 
 ## Project Layout
 

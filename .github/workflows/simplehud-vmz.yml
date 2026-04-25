@@ -1,0 +1,51 @@
+name: Build SimpleHUD VMZ
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "**"
+      - ".github/workflows/simplehud-vmz.yml"
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "**"
+      - ".github/workflows/simplehud-vmz.yml"
+    tags:
+      - "simplehud-v*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-vmz:
+    name: Build SimpleHUD VMZ
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build VMZ using existing script
+        run: bash ./build_simplehud_vmz.sh
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SimpleHUD-SimpleUI-vmz
+          path: mod/SimpleUI.vmz
+          if-no-files-found: error
+
+      - name: Attach VMZ to GitHub Release (tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mod/SimpleUI.vmz
