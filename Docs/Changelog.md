@@ -6,8 +6,18 @@ All notable changes to `SimpleHUD` are documented in this file.
 
 ## [1.0.5] - 2026-04-25
 
-### Changed (beta chrome UX)
-- Marked `Compass` and `Dynamic Crosshair` as beta in the main-menu settings with italic yellow `*Beta` labels beside each `Enable` toggle.
+### Added (notable gameplay HUD features)
+- Added a configurable `Compass` feature to the SimpleHUD runtime overlay (main-menu toggle + style controls).
+- Added a configurable `Dynamic Crosshair` feature to the SimpleHUD runtime overlay (main-menu toggle + style controls).
+- These are both beta features, and are available in a preset called "Beta" currently. I have tested them for hours each to try to make them as performant as possible via caching and other strategies, but if you notice performance impacts with these features (or this mod in general) it would be worth disabling them.
+
+### Added (main-menu customization controls)
+- Added a selectable `Fill empty space` option in the SimpleHUD menu for vitals strip layout behavior.
+- Added FPS text customization toggle to hide/show the `FPS` label prefix in the HUD readout.
+- Added map label customization modes (`default`, `map_only`, `region_only`) for FPS/map info display behavior.
+
+### Added (runtime usability)
+- Added a `Toggle HUD` hotkey/action to quickly show or hide the HUD layer during gameplay.
 
 ### Changed (runtime performance)
 - Optimized dynamic crosshair rendering by caching draw-style values and reducing draw-call overhead.

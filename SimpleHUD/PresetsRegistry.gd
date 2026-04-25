@@ -3,6 +3,7 @@ extends RefCounted
 ## Built-in appearance presets (parallel to `presets/<Id>/` in the repo; scripts live under `preset_configs/` in the shipped mod).
 ## Labels are ordered alphabetically for the menu dropdown.
 const PRESETS: Array = [
+	{"id": "Beta", "label": "Beta", "script": "res://SimpleHUD/preset_configs/Beta.gd"},
 	{"id": "RadialColor", "label": "Radial, Color", "script": "res://SimpleHUD/preset_configs/RadialColor.gd"},
 	{"id": "RadialColorNoHide", "label": "Radial, Color, No Hide", "script": "res://SimpleHUD/preset_configs/RadialColorNoHide.gd"},
 	{"id": "RadialPlain", "label": "Radial, Plain", "script": "res://SimpleHUD/preset_configs/RadialPlain.gd"},
