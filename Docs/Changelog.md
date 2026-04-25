@@ -4,6 +4,19 @@ All downloads are for the latest versions only. Previous version can be built us
 
 All notable changes to `SimpleHUD` are documented in this file.
 
+## [1.0.5] - 2026-04-25
+
+### Changed (beta chrome UX)
+- Marked `Compass` and `Dynamic Crosshair` as beta in the main-menu settings with italic yellow `*Beta` labels beside each `Enable` toggle.
+
+### Changed (runtime performance)
+- Optimized dynamic crosshair rendering by caching draw-style values and reducing draw-call overhead.
+- Reduced per-frame crosshair work by consolidating line rendering paths and avoiding repeated style parsing.
+
+### Fixed (performance safety)
+- Ensured compass/crosshair per-frame work is fully gated by feature toggles so disabled beta features do not run tick-time placement or update logic.
+- Added layout-level guards to keep disabled compass/crosshair widgets hidden without running their expensive visibility/measurement paths.
+
 ## [1.0.4] - 2026-04-23
 
 ### Changed (runtime performance)

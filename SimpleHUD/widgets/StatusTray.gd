@@ -7,6 +7,15 @@ var _box: Container
 var _icon_nodes: Dictionary = {}
 static var _texture_cache: Dictionary = {}
 
+## Integer compare only (no string `hash()` / per-frame signature rebuild). Invalid = force full pass.
+var _last_game_bits: int = -1
+var _last_tex_bits: int = -1
+var _last_cfg_fast: int = -2147483648
+## Updated whenever a full `refresh()` runs; used by HudOverlay tray layout / auto-hide.
+var _cached_visible_icon_count: int = 0
+## True after a full `refresh()` path updates icons/minimum size; HudOverlay consumes this to skip redundant outer `get_combined_minimum_size()`.
+var _minimum_invalidated: bool = true
+
 func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_game_data = game_data
 	_cfg = cfg
@@ -21,6 +30,11 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 		for c in get_children():
 			c.queue_free()
 		_icon_nodes.clear()
+		_last_game_bits = -1
+		_last_tex_bits = -1
+		_last_cfg_fast = -2147483648
+		_cached_visible_icon_count = 0
+		_minimum_invalidated = true
 		if horizontal:
 			_box = HBoxContainer.new()
 		else:
@@ -76,6 +90,33 @@ static func _icon_paths() -> Array:
 	]
 
 
+func _cfg_fast_id(
+	mode: String,
+	fill_empty: bool,
+	px: float,
+	ina: float,
+	active_color: Color,
+	inactive_rgb: Color,
+) -> int:
+	var m := 3
+	match mode:
+		"hidden":
+			m = 0
+		"always":
+			m = 1
+		"inflicted_only":
+			m = 2
+	var sig := 2166136261
+	sig = (sig ^ m) * 16777619
+	sig = (sig ^ (1 if fill_empty else 0)) * 16777619
+	sig = (sig ^ int(px * 1000.0)) * 16777619
+	sig = (sig ^ int(ina * 4000.0)) * 16777619
+	sig = (sig ^ int(active_color.to_rgba32())) * 16777619
+	sig = (sig ^ int(Color(inactive_rgb.r, inactive_rgb.g, inactive_rgb.b, 1.0).to_rgba32())) * 16777619
+	sig = (sig ^ int(_cfg.status_spacing_px)) * 16777619
+	return sig
+
+
 func refresh() -> void:
 	if !is_instance_valid(_game_data) || _box == null:
 		return
@@ -83,6 +124,10 @@ func refresh() -> void:
 	var mode: String = str(_cfg.status_mode)
 	if mode == "hidden":
 		visible = false
+		_last_game_bits = -1
+		_last_tex_bits = -1
+		_last_cfg_fast = -2147483648
+		_cached_visible_icon_count = 0
 		return
 
 	visible = true
@@ -92,16 +137,60 @@ func refresh() -> void:
 	var ina: float = clampf(float(_cfg.status_inactive_alpha), 0.0, 1.0)
 	var px := float(_cfg.status_icon_size_px) * float(_cfg.status_scale_pct) / 100.0
 
+	var gd: Resource = _game_data
+	var bits := 0
+	if bool(gd.get(&"overweight")):
+		bits |= 1 << 0
+	if bool(gd.get(&"starvation")):
+		bits |= 1 << 1
+	if bool(gd.get(&"dehydration")):
+		bits |= 1 << 2
+	if bool(gd.get(&"bleeding")):
+		bits |= 1 << 3
+	if bool(gd.get(&"fracture")):
+		bits |= 1 << 4
+	if bool(gd.get(&"burn")):
+		bits |= 1 << 5
+	if bool(gd.get(&"frostbite")):
+		bits |= 1 << 6
+	if bool(gd.get(&"insanity")):
+		bits |= 1 << 7
+	if bool(gd.get(&"poisoning")):
+		bits |= 1 << 8
+	if bool(gd.get(&"rupture")):
+		bits |= 1 << 9
+	## Use only the canonical `headshot` ailment flag; `head_shot` can be set in non-ailment contexts and caused false positives.
+	if bool(gd.get(&"headshot")):
+		bits |= 1 << 10
+
+	var tex_bits := 0
+	var bit_i := 0
+	for row in _icon_paths():
+		var tr0: TextureRect = _icon_nodes.get(row[0], null) as TextureRect
+		if tr0 != null && tr0.texture != null:
+			tex_bits |= (1 << bit_i)
+		bit_i += 1
+
+	var cfg_fast := _cfg_fast_id(mode, fill_empty, px, ina, active_color, inactive_rgb)
+	if bits == _last_game_bits && tex_bits == _last_tex_bits && cfg_fast == _last_cfg_fast:
+		return
+
+	_minimum_invalidated = true
+
+	var visible_children := 0
+
+	var apply_i := 0
 	for row in _icon_paths():
 		var flag: StringName = row[0]
 		var path: String = row[1]
 		var tr := _icon_nodes.get(flag, null) as TextureRect
 		if tr == null:
+			apply_i += 1
 			continue
 		# Retry icon load lazily if initial setup occurred before resource became available.
 		if tr.texture == null:
 			tr.texture = _load_texture_cached(path)
-		var active := _flag_active(flag)
+		var active := (bits & (1 << apply_i)) != 0
 		var hidden_by_mode := mode == "inflicted_only" && !active
 		var hidden_by_alpha := !active && mode == "always" && ina <= 0.001
 		var hide_icon := hidden_by_mode || hidden_by_alpha
@@ -122,22 +211,30 @@ func refresh() -> void:
 			_:
 				tr.modulate = active_color if active || fill_empty else Color(active_color.r, active_color.g, active_color.b, 0.0)
 
+		if tr.visible:
+			visible_children += 1
+		apply_i += 1
+
 	var min_size: Vector2 = _box.get_combined_minimum_size()
 	var base_px := float(_cfg.status_icon_size_px) * float(_cfg.status_scale_pct) / 100.0
 	if min_size.x <= 0.0 || min_size.y <= 0.0:
 		min_size = Vector2.ONE * base_px
 	custom_minimum_size = min_size
 	size = min_size
+	_cached_visible_icon_count = visible_children
+	_last_game_bits = bits
+	_last_tex_bits = tex_bits
+	_last_cfg_fast = cfg_fast
 
 
 func get_icon_count() -> int:
-	if _box == null:
-		return 0
-	var count := 0
-	for c in _box.get_children():
-		if c is CanvasItem && (c as CanvasItem).visible:
-			count += 1
-	return count
+	return _cached_visible_icon_count
+
+
+func consume_minimum_invalidated() -> bool:
+	var r := _minimum_invalidated
+	_minimum_invalidated = false
+	return r
 
 
 func _ensure_icon_nodes() -> void:
@@ -164,42 +261,3 @@ func _load_texture_cached(path: String) -> Texture2D:
 	if tex != null:
 		_texture_cache[path] = tex
 	return tex
-
-
-func _flag_active(flag: StringName) -> bool:
-	match flag:
-		&"overweight":
-			return _status_flag_bool(["overweight"])
-		&"starvation":
-			return _status_flag_bool(["starvation"])
-		&"dehydration":
-			return _status_flag_bool(["dehydration"])
-		&"bleeding":
-			return _status_flag_bool(["bleeding"])
-		&"fracture":
-			return _status_flag_bool(["fracture"])
-		&"burn":
-			return _status_flag_bool(["burn"])
-		&"frostbite":
-			return _status_flag_bool(["frostbite"])
-		&"insanity":
-			return _status_flag_bool(["insanity"])
-		&"poisoning":
-			return _status_flag_bool(["poisoning"])
-		&"rupture":
-			return _status_flag_bool(["rupture"])
-		&"headshot":
-			return _status_flag_bool(["headshot", "head_shot"])
-		_:
-			return false
-
-
-func _status_flag_bool(keys: Array) -> bool:
-	if _game_data == null || !is_instance_valid(_game_data):
-		return false
-	for k in keys:
-		var key: String = str(k)
-		var v: Variant = _game_data.get(key)
-		if v != null:
-			return bool(v)
-	return false

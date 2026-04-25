@@ -438,11 +438,24 @@ func build(vbox: VBoxContainer) -> void:
 	misc_title.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(misc_title)
 
+	var compass_enable_row := HBoxContainer.new()
+	compass_enable_row.add_theme_constant_override("separation", 8)
 	_compass_enable_cb = CheckBox.new()
 	_compass_enable_cb.text = "Enable Compass"
 	_compass_enable_cb.focus_mode = Control.FOCUS_NONE
+	_compass_enable_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_compass_enable_cb.toggled.connect(_on_misc_field_toggled)
-	vbox.add_child(_compass_enable_cb)
+	compass_enable_row.add_child(_compass_enable_cb)
+	var compass_beta := RichTextLabel.new()
+	compass_beta.bbcode_enabled = true
+	compass_beta.scroll_active = false
+	compass_beta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	compass_beta.autowrap_mode = TextServer.AUTOWRAP_OFF
+	compass_beta.fit_content = true
+	compass_beta.text = "[i][color=#e6d040]*Beta[/color][/i]"
+	compass_beta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	compass_enable_row.add_child(compass_beta)
+	vbox.add_child(compass_enable_row)
 
 	var misc_anchor_row := HBoxContainer.new()
 	misc_anchor_row.add_theme_constant_override("separation", 8)
@@ -482,11 +495,24 @@ func build(vbox: VBoxContainer) -> void:
 
 	vbox.add_child(HSeparator.new())
 
+	var crosshair_enable_row := HBoxContainer.new()
+	crosshair_enable_row.add_theme_constant_override("separation", 8)
 	_crosshair_enable_cb = CheckBox.new()
 	_crosshair_enable_cb.text = "Enable Dynamic Crosshair"
 	_crosshair_enable_cb.focus_mode = Control.FOCUS_NONE
+	_crosshair_enable_cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_crosshair_enable_cb.toggled.connect(_on_misc_field_toggled)
-	vbox.add_child(_crosshair_enable_cb)
+	crosshair_enable_row.add_child(_crosshair_enable_cb)
+	var crosshair_beta := RichTextLabel.new()
+	crosshair_beta.bbcode_enabled = true
+	crosshair_beta.scroll_active = false
+	crosshair_beta.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	crosshair_beta.autowrap_mode = TextServer.AUTOWRAP_OFF
+	crosshair_beta.fit_content = true
+	crosshair_beta.text = "[i][color=#e6d040]*Beta[/color][/i]"
+	crosshair_beta.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	crosshair_enable_row.add_child(crosshair_beta)
+	vbox.add_child(crosshair_enable_row)
 
 	var xr_shape_row := HBoxContainer.new()
 	xr_shape_row.add_theme_constant_override("separation", 8)

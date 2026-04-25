@@ -14,6 +14,12 @@ SimpleHUD now ships as a **single VMZ** with:
 
 The old multi-VMZ-per-preset distribution model is deprecated.
 
+## 1.0.5 Release Notes
+
+- Compass and Dynamic Crosshair are now marked as beta in the settings UI with italic yellow `*Beta` labels.
+- Crosshair rendering is optimized to reduce draw/update overhead during gameplay.
+- Disabled beta chrome features (Compass/Crosshair) now fully skip per-frame update paths to minimize any performance impact on the main HUD feature set.
+
 ## Project Layout
 
 - `mod.txt`  
@@ -52,6 +58,12 @@ From `SimpleHUD/`:
 Build output:
 
 - `mod/SimpleUI.vmz`
+
+CI output:
+
+- GitHub Actions workflow `.github/workflows/simplehud-vmz.yml` builds the same `SimpleHUD/mod/SimpleUI.vmz` using the existing shell script.
+- Every push/PR affecting `SimpleHUD/` uploads `SimpleHUD-SimpleUI-vmz` as a workflow artifact.
+- Tag builds (`v*` or `simplehud-v*`) also attach `SimpleHUD/mod/SimpleUI.vmz` to the GitHub Release as the player-facing deliverable.
 
 Archive includes:
 

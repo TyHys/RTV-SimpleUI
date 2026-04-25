@@ -19,7 +19,6 @@ var game_data: Resource = preload("res://Resources/GameData.tres")
 
 var _cfg: RefCounted
 var _hud: Control
-var _canvas_layer: CanvasLayer
 var _overlay: SimpleHudOverlay
 
 ## Runtime `GameData` the game mutates (often not the same object identity as preload if the scene holds a live ref).
@@ -31,7 +30,7 @@ const _PREFS_CACHE_TTL_FRAMES := 30
 var _logged_overlay_missing_refresh: bool = false
 var _hud_force_hidden: bool = false
 var _next_toggle_hud_bind_probe_frame: int = 0
-const _TOGGLE_HUD_BIND_PROBE_INTERVAL_FRAMES := 30
+const _TOGGLE_HUD_BIND_PROBE_INTERVAL_FRAMES := 90
 
 ## Main menu (`Menu.tscn`) SimpleHUD overlay; used to close on Escape and from Return.
 var _simplehud_main_menu_scene: Control = null
@@ -41,8 +40,16 @@ var _fps_info_node: Control = null
 var _fps_hide_prefix_last: bool = true
 var _map_label_mode_last: String = "default"
 var _map_label_full_cache: String = ""
+var _last_map_label_src_styled: String = ""
+var _has_applied_map_label_style: bool = false
+var _fps_map_cache_ok: bool = false
+var _fps_map_cached_info: Control = null
+var _fps_map_c_scale: float = 0.0
+var _fps_map_c_ox: float = 0.0
+var _fps_map_c_oy: float = 0.0
+var _fps_map_c_alpha: float = -1.0
 var _next_menu_install_probe_frame: int = 0
-const _MENU_INSTALL_PROBE_INTERVAL_FRAMES := 10
+const _MENU_INSTALL_PROBE_INTERVAL_FRAMES := 30
 
 ## Menu card: was fixed 512×704 px so the dark fill was narrower than long label rows (~674 px). Size from viewport instead.
 const SIMPLEHUD_MENU_WIDTH_FRAC := 0.52
@@ -234,10 +241,38 @@ func _menu_panel_open_diag_async() -> void:
 func _game_data_menu_open(gd: Resource) -> bool:
 	if gd == null || !is_instance_valid(gd):
 		return false
-	var v: Variant = gd.get("menu")
-	if v == null:
+	return bool(gd.menu)
+
+
+## Whether the SimpleHUD canvas should update/draw. Preloaded GameData may keep `menu=true`; live `menu` can be wrong — if the vanilla HUD node exists (see `_resolve_hud`), we are in gameplay and must show the overlay (compass, crosshair, tray).
+func _show_simplehud_layer(gameplay_hud: Control = null) -> bool:
+	if _hud_force_hidden:
 		return false
-	return bool(v)
+	var tree := get_tree()
+	if tree == null:
+		return false
+	var cs: Node = tree.current_scene
+	if cs != null && str(cs.name) == "Menu":
+		return false
+	var hud_ctrl := gameplay_hud
+	if hud_ctrl == null || !is_instance_valid(hud_ctrl):
+		hud_ctrl = _resolve_hud()
+	if hud_ctrl != null && is_instance_valid(hud_ctrl):
+		return true
+	if _live_game_data != null && is_instance_valid(_live_game_data):
+		return !_game_data_menu_open(_live_game_data)
+	if cs != null && str(cs.name) != "Menu":
+		return true
+	return !_game_data_menu_open(game_data)
+
+
+## Layout/tick use the vanilla HUD control size when parented under `HUD` (matches game canvas); fall back to the viewport if not laid out yet.
+func _overlay_layout_size_px(gameplay_hud: Control) -> Vector2:
+	if gameplay_hud != null && is_instance_valid(gameplay_hud):
+		var sz: Vector2 = gameplay_hud.size
+		if sz.x > 1.0 && sz.y > 1.0:
+			return sz
+	return get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1920, 1080)
 
 
 ## Injects a "SimpleHUD" `res://Scenes/Menu.tscn` — `Main/Buttons` (sibling to "New", "Load game", …) and a full-screen settings layer. See `Auxillary/References/.../Scripts/Menu.gd` + `Scenes/Menu.tscn`.
@@ -818,14 +853,10 @@ func _refresh_hud_layout_impl() -> void:
 		_overlay.set_live_game_data(live)
 	else:
 		_overlay.set_live_game_data(game_data)
-	var gd_menu: Resource = live if live != null && is_instance_valid(live) else game_data
-	var menu_hide := _game_data_menu_open(gd_menu)
-	var show_layer: bool = !menu_hide && !_hud_force_hidden
-	_overlay.tick(0.0, true)
+	var show_layer: bool = _show_simplehud_layer(hud)
+	var vp_sz: Vector2 = _overlay_layout_size_px(hud)
+	_overlay.tick(0.0, true, show_layer, vp_sz)
 	_overlay.notify_config_changed()
-	var vp_sz: Vector2 = (
-		get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1920, 1080)
-	)
 	_overlay.layout_for_viewport(vp_sz, show_layer)
 
 
@@ -862,18 +893,21 @@ func _bind_hud(hud: Control) -> void:
 	_clear_binding()
 	_hud = hud
 
-	_canvas_layer = CanvasLayer.new()
-	_canvas_layer.name = "SimpleHUDCanvas"
-	_canvas_layer.layer = 128
-	_canvas_layer.follow_viewport_enabled = true
-	get_tree().root.add_child(_canvas_layer)
-
+	## Parent into the vanilla HUD (`HUD.gd` subtree per game layout) instead of a root `CanvasLayer`.
+	## Same canvas as native vitals/crosshair — avoids an extra viewport layer compositing the full-screen overlay every frame.
 	_overlay = SimpleHudOverlay.new()
+	_overlay.name = "SimpleHUD"
 	_overlay.setup(game_data, _cfg)
 	_overlay.visible = true
-	_canvas_layer.add_child(_overlay)
-	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_overlay.offset_left = 0.0
+	_overlay.offset_top = 0.0
+	_overlay.offset_right = 0.0
+	_overlay.offset_bottom = 0.0
+	_overlay.z_index = 128
+	_overlay.z_as_relative = false
+	hud.add_child(_overlay)
 	_fps_info_node = null
 
 	_apply_overlay(hud, 0.0)
@@ -899,20 +933,15 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	else:
 		_overlay.set_live_game_data(game_data)
 
-	var gd_menu: Resource = live if live != null && is_instance_valid(live) else game_data
-	var menu_hide := _game_data_menu_open(gd_menu)
-
 	# Drive our vitals strip only from pause/menu — not from HUD/Stats.visible. The game may hide the
 	# Stats node while gameplay values are still meaningful; tying show_layer to it skipped tick()
 	# and left the overlay blank (no updates, widgets never filled in).
-	var show_layer: bool = !menu_hide && !_hud_force_hidden
+	var show_layer: bool = _show_simplehud_layer(hud)
 
+	var vp_sz: Vector2 = _overlay_layout_size_px(hud)
 	if show_layer:
-		_overlay.tick(delta)
+		_overlay.tick(delta, false, show_layer, vp_sz)
 
-	var vp_sz: Vector2 = (
-		get_viewport().get_visible_rect().size if get_viewport() != null else Vector2(1920, 1080)
-	)
 	_overlay.layout_for_viewport(vp_sz, show_layer)
 
 	_apply_fps_map(hud, prefs)
@@ -921,11 +950,11 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 ## Escape menu / Settings toggles (Preferences.tres). When true, we hide vanilla rows and draw replacements.
 func _sync_vanilla_hud_overrides(hud: Control, vitals_on: bool, medical_on: bool) -> void:
 	var vn := hud.get_node_or_null("Stats/Vitals") as Control
-	if vn != null && vitals_on:
+	if vn != null && vitals_on && vn.visible:
 		vn.visible = false
 
 	var mn := hud.get_node_or_null("Stats/Medical") as Control
-	if mn != null && medical_on:
+	if mn != null && medical_on && mn.visible:
 		mn.visible = false
 
 
@@ -1012,13 +1041,32 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 	var info := hud.get_node_or_null("Info") as Control
 	if info == null:
 		return
+	if info != _fps_map_cached_info:
+		_fps_map_cached_info = info
+		_fps_map_cache_ok = false
 
 	_ensure_fps_label_style(info)
 	_apply_map_label_style(info)
-	info.scale = Vector2(_cfg.fps_map_scale, _cfg.fps_map_scale)
-	info.position = Vector2(_cfg.fps_map_offset_x, _cfg.fps_map_offset_y)
+	var sc := float(_cfg.fps_map_scale)
+	var ox := float(_cfg.fps_map_offset_x)
+	var oy := float(_cfg.fps_map_offset_y)
 	var a: float = clampf(float(_cfg.fps_map_alpha), 0.0, 1.0)
+	if (
+		_fps_map_cache_ok
+		&& is_equal_approx(sc, _fps_map_c_scale)
+		&& is_equal_approx(ox, _fps_map_c_ox)
+		&& is_equal_approx(oy, _fps_map_c_oy)
+		&& is_equal_approx(a, _fps_map_c_alpha)
+	):
+		return
+	info.scale = Vector2(sc, sc)
+	info.position = Vector2(ox, oy)
 	info.modulate = Color(1.0, 1.0, 1.0, a)
+	_fps_map_cache_ok = true
+	_fps_map_c_scale = sc
+	_fps_map_c_ox = ox
+	_fps_map_c_oy = oy
+	_fps_map_c_alpha = a
 
 func _ensure_fps_label_style(info: Control) -> void:
 	if info == null:
@@ -1067,6 +1115,8 @@ func _apply_map_label_style(info: Control) -> void:
 	if mode != "default" && mode != "map_only" && mode != "region_only":
 		mode = "default"
 	var txt := map_label.text.strip_edges()
+	if _has_applied_map_label_style && txt == _last_map_label_src_styled && mode == _map_label_mode_last:
+		return
 	if txt.find("(") != -1 && txt.find(")") != -1:
 		_map_label_full_cache = txt
 	var full := _map_label_full_cache if _map_label_full_cache != "" else txt
@@ -1088,17 +1138,18 @@ func _apply_map_label_style(info: Control) -> void:
 	if _map_label_mode_last != mode || map_label.text != out:
 		map_label.text = out
 	_map_label_mode_last = mode
+	_last_map_label_src_styled = txt
+	_has_applied_map_label_style = true
 
 
 func _clear_binding(restore_vanilla: bool = false) -> void:
 	var bound_hud := _hud
-	if is_instance_valid(_canvas_layer):
-		_canvas_layer.queue_free()
-	elif is_instance_valid(_overlay):
+	if is_instance_valid(_overlay):
 		_overlay.queue_free()
-	_canvas_layer = null
 	_overlay = null
 	_fps_info_node = null
+	_fps_map_cache_ok = false
+	_fps_map_cached_info = null
 	if restore_vanilla && is_instance_valid(bound_hud):
 		_restore_vanilla_hud_visibility(bound_hud)
 	_hud = null

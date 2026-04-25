@@ -8,6 +8,12 @@ This workshop release ships as **one download** (`SimpleUI.vmz`) with:
 - live in-game configuration
 - persistent per-player customization
 
+## 1.0.5 Update Highlights
+
+- Dynamic Crosshair has additional rendering/per-frame optimization to further reduce overhead.
+- Compass and Dynamic Crosshair are now clearly marked as beta in the settings panel (italic yellow `*Beta`).
+- If Compass and/or Dynamic Crosshair are disabled, their update paths are skipped to reduce risk of impacting core HUD performance.
+
 ## What This Framework Lets You Control
 
 - **Visibility logic:** show vitals/status only when they matter, or keep them always visible.
@@ -55,6 +61,9 @@ For loader setup details, troubleshooting, and path specifics, refer to Metro Mo
 
 ## Recent Improvements
 
+- **1.0.5:** Dynamic crosshair rendering is further optimized to lower draw/update overhead.
+- **1.0.5:** Compass and dynamic crosshair are clearly marked as beta in the settings panel (`*Beta`).
+- **1.0.5:** When compass/crosshair are disabled, their runtime update paths are skipped to minimize performance impact.
 - Runtime overhead reduced with cached preferences reads and pooled status icon rendering.
 - Stamina/fatigue now share the same default threshold behavior as other non-health vitals.
 - Debug diagnostics are quieter by default while preserving warning/error visibility.

@@ -6,11 +6,18 @@ extends Control
 @export var icon_size_px: float = 32.0
 
 var _ratio: float = 1.0
+var _ratio_permille: int = -1
 var _icon: Texture2D
 var _progress_color: Color = Color.WHITE
+var _progress_color_rgba: int = -1
 
 func set_ratio(r: float) -> void:
-	_ratio = clampf(r, 0.0, 1.0)
+	var nr := clampf(r, 0.0, 1.0)
+	var pm := int(round(nr * 1000.0))
+	if pm == _ratio_permille:
+		return
+	_ratio_permille = pm
+	_ratio = nr
 	queue_redraw()
 
 func set_icon(texture: Texture2D) -> void:
@@ -18,6 +25,10 @@ func set_icon(texture: Texture2D) -> void:
 	queue_redraw()
 
 func set_progress_color(color: Color) -> void:
+	var cr := color.to_rgba32()
+	if cr == _progress_color_rgba:
+		return
+	_progress_color_rgba = cr
 	_progress_color = color
 	queue_redraw()
 
@@ -27,7 +38,8 @@ func _draw() -> void:
 	var w: float = clampf(ring_width, 1.0, rad * 0.5)
 	var start := -PI / 2.0
 	var seg_end := start + _ratio * TAU
-	const ARC_POINTS := 48
+	## Fewer segments = cheaper `draw_arc` (imperceptible on small HUD rings).
+	const ARC_POINTS := 20
 
 	# Dark circular backdrop for icon + donut ring.
 	draw_circle(center, rad + (w * 0.95), Color8(0, 5, 15, 255))

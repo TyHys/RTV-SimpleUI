@@ -21,6 +21,11 @@ var _built_radial: bool = false
 var _cfg: RefCounted
 var _last_layout_scale: float = -1.0
 var _last_layout_radial: bool = false
+var _last_numeric_percent: int = -999999
+var _last_label_color_rgba: int = -1
+var _last_gradient_color_bucket: int = -2147483648
+var _cached_gradient_color: Color = Color.WHITE
+var _last_alpha_permille: int = -1
 
 const _BASE_FONT := 13
 const _BASE_OUTLINE := 6
@@ -64,27 +69,55 @@ func setup(p_stat_id: StringName, p_title: String, _game_data: Resource, use_rad
 	_built_radial = use_radial
 	_last_layout_scale = -1.0
 	_last_layout_radial = use_radial
+	_last_numeric_percent = -999999
+	_last_label_color_rgba = -1
+	_last_gradient_color_bucket = -2147483648
+	_last_alpha_permille = -1
 	_sync_layout_scale(true)
+
+func _percent_color_bucket(p: float) -> int:
+	if stat_id == SimpleHudConfigScript.STAT_BODY_TEMP:
+		return int(round(p * 10.0))
+	return int(round(clampf(p, 0.0, 100.0)))
+
 
 func update_display(percent: float, visible_rule: bool, use_radial: bool, alpha_mult: float) -> void:
 	if use_radial != _built_radial:
 		setup(stat_id, title, null, use_radial, _cfg)
 
-	modulate.a = alpha_mult
-	visible = visible_rule
 	if !visible_rule:
+		if visible:
+			visible = false
 		return
+
+	if !visible:
+		visible = true
+
+	var ap: int = int(round(clampf(alpha_mult, 0.0, 1.0) * 1000.0))
+	if ap != _last_alpha_permille:
+		_last_alpha_permille = ap
+		modulate.a = alpha_mult
+
+	var cfg_grad := _cfg as SimpleHudConfigScript
+	var grad_bucket := _percent_color_bucket(percent)
+	if cfg_grad != null && grad_bucket != _last_gradient_color_bucket:
+		_last_gradient_color_bucket = grad_bucket
+		_cached_gradient_color = cfg_grad.get_stat_text_color_for(stat_id, percent)
 
 	if use_radial && _radial != null:
 		_radial.set_ratio(percent / 100.0)
-		var rc := Color.WHITE
-		var cfg_radial := _cfg as SimpleHudConfigScript
-		if cfg_radial != null:
-			rc = cfg_radial.get_stat_text_color_for(stat_id, percent)
+		var rc: Color = _cached_gradient_color if cfg_grad != null else Color.WHITE
 		_radial.set_progress_color(rc)
 	elif _label:
-		_label.text = "%s %d" % [title, int(round(percent))]
-	_apply_text_color(percent)
+		var ip := int(round(percent))
+		if ip != _last_numeric_percent:
+			_last_numeric_percent = ip
+			_label.text = "%s %d" % [title, ip]
+		var c: Color = _cached_gradient_color if cfg_grad != null else Color.WHITE
+		var cr := c.to_rgba32()
+		if cr != _last_label_color_rgba:
+			_last_label_color_rgba = cr
+			_label.add_theme_color_override("font_color", c)
 	_sync_layout_scale(false)
 
 
@@ -113,15 +146,6 @@ func _sync_layout_scale(force: bool) -> void:
 		var ol := maxi(0, int(round(float(_BASE_OUTLINE) * sc)))
 		_label.add_theme_font_size_override("font_size", fs)
 		_label.add_theme_constant_override("outline_size", ol)
-
-
-func _apply_text_color(percent: float) -> void:
-	var c := Color.WHITE
-	var cfg_txt := _cfg as SimpleHudConfigScript
-	if cfg_txt != null:
-		c = cfg_txt.get_stat_text_color_for(stat_id, percent)
-	if _label:
-		_label.add_theme_color_override("font_color", c)
 
 
 func _load_icon_texture(path: String) -> Texture2D:
