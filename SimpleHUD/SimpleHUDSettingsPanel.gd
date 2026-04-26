@@ -318,6 +318,26 @@ func build(vbox: VBoxContainer) -> void:
 	_g_lo_pct.value_changed.connect(_on_stat_field_changed_val)
 	row_lo.add_child(_g_lo_pct)
 	_grad_custom.add_child(row_lo)
+
+	vbox.add_child(HSeparator.new())
+
+	_helmet_vital_cb = CheckBox.new()
+	_helmet_vital_cb.text = "Show Helmet Vital"
+	_helmet_vital_cb.focus_mode = Control.FOCUS_NONE
+	_helmet_vital_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_helmet_vital_cb)
+
+	_cat_vital_cb = CheckBox.new()
+	_cat_vital_cb.text = "Show Cat Vital"
+	_cat_vital_cb.focus_mode = Control.FOCUS_NONE
+	_cat_vital_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_cat_vital_cb)
+
+	_plate_vital_cb = CheckBox.new()
+	_plate_vital_cb.text = "Show Plate Vital"
+	_plate_vital_cb.focus_mode = Control.FOCUS_NONE
+	_plate_vital_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_plate_vital_cb)
 	vbox.add_child(HSeparator.new())
 	_vitals_end_idx = vbox.get_child_count() - 1
 
@@ -424,7 +444,7 @@ func build(vbox: VBoxContainer) -> void:
 	_ailments_end_idx = vbox.get_child_count() - 1
 
 	## ── FPS / Map ─────────────────────────────────────────────────────────────
-	## Order: Equipment vitals → [sep] → FPS Label → Map Label →
+	## Order: FPS Label → Map Label →
 	##        Edge → Alignment → Encumbrance → Backpack Value
 	_fps_map_toggle_btn = Button.new()
 	_fps_map_toggle_btn.toggle_mode = true
@@ -438,26 +458,6 @@ func build(vbox: VBoxContainer) -> void:
 	fpm_title.text = "FPS / Map"
 	fpm_title.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(fpm_title)
-
-	_helmet_vital_cb = CheckBox.new()
-	_helmet_vital_cb.text = "Show Helmet Vital"
-	_helmet_vital_cb.focus_mode = Control.FOCUS_NONE
-	_helmet_vital_cb.toggled.connect(_on_misc_field_toggled)
-	vbox.add_child(_helmet_vital_cb)
-
-	_cat_vital_cb = CheckBox.new()
-	_cat_vital_cb.text = "Show Cat Vital"
-	_cat_vital_cb.focus_mode = Control.FOCUS_NONE
-	_cat_vital_cb.toggled.connect(_on_misc_field_toggled)
-	vbox.add_child(_cat_vital_cb)
-
-	_plate_vital_cb = CheckBox.new()
-	_plate_vital_cb.text = "Show Plate Vital"
-	_plate_vital_cb.focus_mode = Control.FOCUS_NONE
-	_plate_vital_cb.toggled.connect(_on_misc_field_toggled)
-	vbox.add_child(_plate_vital_cb)
-
-	vbox.add_child(HSeparator.new())
 
 	_fps_hide_label_cb = CheckBox.new()
 	_fps_hide_label_cb.text = "Hide \"FPS:\" label prefix"

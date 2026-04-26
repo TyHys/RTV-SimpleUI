@@ -110,6 +110,10 @@ func _ready() -> void:
 		_ensure_toggle_hud_action()
 	_cfg = SimpleHUDConfigScript.new()
 	_cfg.load_all()
+	## These two flags should come from persisted user preference keys only.
+	## If keys are missing (new/older preference files), default them to off.
+	_cfg.fps_map_show_encumbrance_pct = false
+	_cfg.fps_map_show_inventory_value = false
 	UserPreferencesScript.merge_into(_cfg)
 	log_diag(
 		"Ready: preset numeric_only=%s health_radial_cfg=%s get_radial(health)=%s"
