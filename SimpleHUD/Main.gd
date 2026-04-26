@@ -1454,16 +1454,18 @@ func _fps_map_cluster_position(info: Control, hud: Control, ox: float, oy: float
 
 func _fps_map_cluster_visual_size(info: Control) -> Vector2:
 	var core_sz := _fps_map_info_only_size(info)
+	var core_h := _fps_map_core_text_bottom_offset_px(info)
 	if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label) && _fps_map_extra_label.visible:
 		## extra label is an unscaled sibling of info; its font_size is already pre-multiplied by
 		## info.scale in _sync_fps_map_extra_style, so _measure returns true screen pixels directly.
 		var extra_sz := _measure_multiline_label_size(_fps_map_extra_label)
 		var indent := ((_FPS_MAP_ICON_SIDE_PX + _FPS_MAP_ICON_GAP_PX) * info.scale.x) if _fps_map_extra_show_weight_icon else 0.0
-		var out := Vector2(maxf(core_sz.x, extra_sz.x + indent), core_sz.y + _FPS_MAP_EXTRA_SEP_PX + extra_sz.y)
-		log_fpsmap_diag("cluster size core=%s extra=%s indent=%.1f sep=%.1f out=%s" % [core_sz, extra_sz, indent, _FPS_MAP_EXTRA_SEP_PX, out])
+		var out := Vector2(maxf(core_sz.x, extra_sz.x + indent), core_h + _FPS_MAP_EXTRA_SEP_PX + extra_sz.y)
+		log_fpsmap_diag("cluster size core=%s core_h=%.2f extra=%s indent=%.1f sep=%.1f out=%s" % [core_sz, core_h, extra_sz, indent, _FPS_MAP_EXTRA_SEP_PX, out])
 		return out
-	log_fpsmap_diag("cluster size core-only=%s" % [core_sz])
-	return core_sz
+	var out_core := Vector2(core_sz.x, core_h)
+	log_fpsmap_diag("cluster size core-only=%s core_h=%.2f out=%s" % [core_sz, core_h, out_core])
+	return out_core
 
 
 func _fps_map_info_only_size(info: Control) -> Vector2:
@@ -1474,6 +1476,25 @@ func _fps_map_info_only_size(info: Control) -> Vector2:
 	# include current control size so trailing-edge placement never underestimates.
 	base = Vector2(maxf(base.x, info.size.x), maxf(base.y, info.size.y))
 	return base * info.scale
+
+
+func _fps_map_core_text_bottom_offset_px(info: Control) -> float:
+	if info == null || !is_instance_valid(info):
+		return 0.0
+	var info_gr := info.get_global_rect()
+	var info_top := info_gr.position.y
+	var best_bottom := -1.0
+	for p in ["Map", "FPS/Frames", "FPS"]:
+		var ci := info.get_node_or_null(NodePath(p)) as CanvasItem
+		if ci == null || !ci.visible:
+			continue
+		if ci is Control:
+			var cr := (ci as Control).get_global_rect()
+			best_bottom = maxf(best_bottom, cr.position.y + cr.size.y)
+	if best_bottom < 0.0:
+		return _fps_map_info_only_size(info).y
+	var off := best_bottom - info_top
+	return clampf(off, 0.0, _fps_map_info_only_size(info).y)
 
 
 func _update_fps_map_extra_lines(info: Control, hud: Control) -> bool:
@@ -1567,7 +1588,8 @@ func _position_fps_map_extras(info: Control) -> void:
 		return
 	var sc := info.scale
 	var core_sz := _fps_map_info_only_size(info)
-	var base := info.position + Vector2(0.0, core_sz.y + _FPS_MAP_EXTRA_SEP_PX)
+	var core_h := _fps_map_core_text_bottom_offset_px(info)
+	var base := info.position + Vector2(0.0, core_h + _FPS_MAP_EXTRA_SEP_PX)
 	var icon_span := ((_FPS_MAP_ICON_SIDE_PX + _FPS_MAP_ICON_GAP_PX) * sc.x) if _fps_map_extra_show_weight_icon else 0.0
 	var label_sz := _measure_multiline_label_size(_fps_map_extra_label)
 	var right_x := info.position.x + core_sz.x
@@ -1582,7 +1604,7 @@ func _position_fps_map_extras(info: Control) -> void:
 		)
 		log_fpsmap_diag("extras clamp vp=%s label_sz=%s clamped_pos=%s" % [vp_size, label_sz, _fps_map_extra_label.position])
 	_refresh_fps_map_weight_icon_transform(_fps_map_extra_label.position, sc)
-	log_fpsmap_diag("extras positioned base=%s right_x=%.2f icon_span=%.2f label_pos=%s icon=%s" % [base, right_x, icon_span, _fps_map_extra_label.position, _fps_map_extra_show_weight_icon])
+	log_fpsmap_diag("extras positioned base=%s right_x=%.2f core_h=%.2f icon_span=%.2f label_pos=%s icon=%s" % [base, right_x, core_h, icon_span, _fps_map_extra_label.position, _fps_map_extra_show_weight_icon])
 
 
 func _refresh_fps_map_weight_icon_transform(label_pos: Vector2, scale_vec: Vector2) -> void:
