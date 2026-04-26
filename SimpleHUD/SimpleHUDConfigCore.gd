@@ -160,6 +160,10 @@ var map_label_mode: String = "default"
 var misc_vital_helmet_enabled: bool = false
 var misc_vital_cat_enabled: bool = false
 var misc_vital_plate_enabled: bool = false
+## "always_hide" | "top_left" | "top_center" | "top_right" | "left_center" | "right_center" | "bottom_left" | "bottom_center" | "bottom_right"
+var permadeath_icon_position: String = "always_hide"
+var permadeath_icon_scale_pct: float = 100.0
+var permadeath_icon_alpha: float = 1.0
 var fps_map_show_encumbrance_pct: bool = false
 var fps_map_show_inventory_value: bool = false
 ## Which edge to dock FPS/map cluster to: top|bottom|left|right
@@ -209,6 +213,13 @@ var stat_text_low_b: int = 15
 
 ## When non-health stats are visible, floor modulate.a so bars near ~70% are still readable (pure 1-p/100 is often ~0.3 alpha).
 var min_stat_alpha_floor: float = 0.0
+
+## When true, a vital that drops by at least `show_on_change_min_delta_pct` stays fully visible for `show_on_change_duration_sec` seconds even when it is above its display threshold.
+var show_on_change_enabled: bool = false
+## Minimum % drop (0–100) that triggers the Show on Change window.
+var show_on_change_min_delta_pct: float = 5.0
+## Seconds the vital remains fully visible after a qualifying change.
+var show_on_change_duration_sec: float = 4.0
 
 ## "dynamic" | "opaque" | "static". Mutually exclusive styles; legacy saves infer from `min_stat_alpha_floor` when unset.
 var vitals_transparency_mode: String = "dynamic"
@@ -277,6 +288,12 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 		numeric_only = bool(cf.get_value("general", "numeric_only"))
 	if cf.has_section_key("general", "stamina_fatigue_near_zero_cutoff"):
 		stamina_fatigue_near_zero_cutoff = clampf(float(cf.get_value("general", "stamina_fatigue_near_zero_cutoff")), 0.0, 5.0)
+	if cf.has_section_key("general", "show_on_change_enabled"):
+		show_on_change_enabled = bool(cf.get_value("general", "show_on_change_enabled"))
+	if cf.has_section_key("general", "show_on_change_min_delta_pct"):
+		show_on_change_min_delta_pct = clampf(float(cf.get_value("general", "show_on_change_min_delta_pct")), 0.0, 100.0)
+	if cf.has_section_key("general", "show_on_change_duration_sec"):
+		show_on_change_duration_sec = clampf(float(cf.get_value("general", "show_on_change_duration_sec")), 0.0, 30.0)
 
 	for stat_id in STAT_IDS:
 		var sec := stat_id
@@ -370,6 +387,12 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 			misc_vital_cat_enabled = bool(cf.get_value("misc", "vital_cat_enabled"))
 		if cf.has_section_key("misc", "vital_plate_enabled"):
 			misc_vital_plate_enabled = bool(cf.get_value("misc", "vital_plate_enabled"))
+		if cf.has_section_key("misc", "permadeath_icon_position"):
+			permadeath_icon_position = _normalize_permadeath_position(str(cf.get_value("misc", "permadeath_icon_position")))
+		if cf.has_section_key("misc", "permadeath_icon_scale_pct"):
+			permadeath_icon_scale_pct = clampf(float(cf.get_value("misc", "permadeath_icon_scale_pct")), 10.0, 400.0)
+		if cf.has_section_key("misc", "permadeath_icon_alpha"):
+			permadeath_icon_alpha = clampf(float(cf.get_value("misc", "permadeath_icon_alpha")), 0.0, 1.0)
 		if cf.has_section_key("misc", "show_encumbrance_pct"):
 			fps_map_show_encumbrance_pct = bool(cf.get_value("misc", "show_encumbrance_pct"))
 		if cf.has_section_key("misc", "show_inventory_value"):
@@ -507,6 +530,9 @@ func apply_defaults() -> void:
 	misc_vital_helmet_enabled = false
 	misc_vital_cat_enabled = false
 	misc_vital_plate_enabled = false
+	permadeath_icon_position = "always_hide"
+	permadeath_icon_scale_pct = 100.0
+	permadeath_icon_alpha = 1.0
 	fps_map_show_encumbrance_pct = false
 	fps_map_show_inventory_value = false
 	fps_map_cluster_justify = "top"
@@ -526,6 +552,9 @@ func apply_defaults() -> void:
 	stat_text_low_r = 200
 	stat_text_low_g = 25
 	stat_text_low_b = 15
+	show_on_change_enabled = false
+	show_on_change_min_delta_pct = 5.0
+	show_on_change_duration_sec = 4.0
 
 func get_status_icon_color() -> Color:
 	return Color8(status_color_r, status_color_g, status_color_b, 255)
@@ -725,6 +754,17 @@ func _normalize_cluster_edge(s: String) -> String:
 			return "right"
 		_:
 			return "top"
+
+
+func _normalize_permadeath_position(s: String) -> String:
+	var k := s.strip_edges().to_lower()
+	match k:
+		"top_left", "top_center", "top_right", "left_center", "right_center", "bottom_left", "bottom_center", "bottom_right":
+			return k
+		"hidden":
+			return "always_hide"
+		_:
+			return "always_hide"
 
 
 func _normalize_cluster_alignment(s: String) -> String:

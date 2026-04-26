@@ -86,6 +86,7 @@ var _show_all_vitals_action_ready: bool = false
 ## Cached after binding to avoid get_node_or_null calls on every frame tick.
 var _hud_vitals_node: Control = null
 var _hud_medical_node: Control = null
+var _hud_permadeath_node: Control = null
 var _hud_info_node: Control = null
 var _hud_map_label: Label = null
 ## Cached after the first successful keybinding-UI tree scan — avoids full DFS every 90 frames once found.
@@ -645,6 +646,26 @@ func apply_vitals_strip_settings_from_ui(
 	refresh_hud_layout()
 
 
+func get_show_on_change_settings_for_ui() -> Dictionary:
+	return {
+		"show_on_change_enabled": bool(_cfg.show_on_change_enabled),
+		"show_on_change_min_delta_pct": float(_cfg.show_on_change_min_delta_pct),
+		"show_on_change_duration_sec": float(_cfg.show_on_change_duration_sec),
+	}
+
+
+func apply_show_on_change_settings_from_ui(
+	enabled: bool,
+	min_delta_pct: float,
+	duration_sec: float,
+) -> void:
+	_cfg.show_on_change_enabled = enabled
+	_cfg.show_on_change_min_delta_pct = clampf(min_delta_pct, 0.0, 100.0)
+	_cfg.show_on_change_duration_sec = clampf(duration_sec, 0.0, 30.0)
+	UserPreferencesScript.persist_preferences_json(_cfg)
+	refresh_hud_layout()
+
+
 func get_misc_settings_for_ui() -> Dictionary:
 	return {
 		"compass_enabled": bool(_cfg.compass_enabled),
@@ -672,6 +693,9 @@ func get_misc_settings_for_ui() -> Dictionary:
 		"show_inventory_value": bool(_cfg.fps_map_show_inventory_value),
 		"fps_map_cluster_justify": str(_cfg.fps_map_cluster_justify),
 		"fps_map_cluster_alignment": str(_cfg.fps_map_cluster_alignment),
+		"permadeath_icon_position": str(_cfg.permadeath_icon_position),
+		"permadeath_icon_scale_pct": float(_cfg.permadeath_icon_scale_pct),
+		"permadeath_icon_alpha": float(_cfg.permadeath_icon_alpha),
 	}
 
 
@@ -701,6 +725,9 @@ func apply_misc_settings_from_ui(
 	show_inventory_value: bool = false,
 	fps_map_cluster_justify: String = "top",
 	fps_map_cluster_alignment: String = "leading",
+	permadeath_icon_position: String = "always_hide",
+	permadeath_icon_scale_pct: float = 100.0,
+	permadeath_icon_alpha: float = 1.0,
 ) -> void:
 	_cfg.compass_enabled = compass_enabled
 	_cfg.compass_anchor = "bottom" if str(compass_anchor).to_lower() == "bottom" else "top"
@@ -727,6 +754,9 @@ func apply_misc_settings_from_ui(
 	_cfg.fps_map_show_inventory_value = show_inventory_value
 	_cfg.fps_map_cluster_justify = _normalize_cluster_edge(fps_map_cluster_justify)
 	_cfg.fps_map_cluster_alignment = _normalize_cluster_alignment(fps_map_cluster_alignment)
+	_cfg.permadeath_icon_position = _cfg._normalize_permadeath_position(permadeath_icon_position)
+	_cfg.permadeath_icon_scale_pct = clampf(permadeath_icon_scale_pct, 10.0, 400.0)
+	_cfg.permadeath_icon_alpha = clampf(permadeath_icon_alpha, 0.0, 1.0)
 	var mm := str(map_label_mode).to_lower()
 	match mm:
 		"map_only", "region_only":
@@ -1078,6 +1108,7 @@ func _bind_hud(hud: Control) -> void:
 	_hud = hud
 	_hud_vitals_node = hud.get_node_or_null("Stats/Vitals") as Control
 	_hud_medical_node = hud.get_node_or_null("Stats/Medical") as Control
+	_hud_permadeath_node = hud.get_node_or_null("Permadeath") as Control
 	_hud_info_node = hud.get_node_or_null("Info") as Control
 	if _hud_info_node != null:
 		_hud_map_label = _hud_info_node.get_node_or_null("Map") as Label
@@ -1155,6 +1186,18 @@ func _sync_vanilla_hud_overrides(hud: Control, vitals_on: bool, medical_on: bool
 		_hud_medical_node = mn
 	if mn != null && medical_on && mn.visible:
 		mn.visible = false
+
+	## Hide vanilla permadeath indicator when we're drawing our own; restore it when always_hide.
+	var pn := _hud_permadeath_node
+	if pn == null || !is_instance_valid(pn):
+		pn = hud.get_node_or_null("Permadeath") as Control
+		_hud_permadeath_node = pn
+	if pn != null:
+		## Always suppress the vanilla permadeath node while SimpleHUD is bound.
+		## When always_hide is selected, our widget stays hidden — vanilla HUD.gd drives
+		## the vanilla node itself, so we must not fight it by restoring visibility here.
+		if pn.visible:
+			pn.visible = false
 
 
 func _load_preferences(force_refresh: bool = false) -> Resource:
@@ -1896,6 +1939,7 @@ func _clear_binding(restore_vanilla: bool = false) -> void:
 	_fps_map_cached_info = null
 	_hud_vitals_node = null
 	_hud_medical_node = null
+	_hud_permadeath_node = null
 	_hud_info_node = null
 	_hud_map_label = null
 	if restore_vanilla && is_instance_valid(bound_hud):

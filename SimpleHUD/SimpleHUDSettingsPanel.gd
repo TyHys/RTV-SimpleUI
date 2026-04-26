@@ -63,6 +63,10 @@ var _crosshair_rgb_row: Control
 var _crosshair_r_spin: SpinBox
 var _crosshair_g_spin: SpinBox
 var _crosshair_b_spin: SpinBox
+var _permadeath_icon_pos_opt: OptionButton
+var _permadeath_icon_scale_spin: SpinBox
+var _permadeath_icon_alpha_spin: SpinBox
+var _permadeath_icon_sub_rows: Control
 
 var _spacing_spin: SpinBox
 var _vitals_strip_align_opt: OptionButton
@@ -70,6 +74,10 @@ var _vitals_fill_empty_cb: CheckBox
 var _vitals_transparency_opt: OptionButton
 var _vitals_static_opacity_spin: SpinBox
 var _vitals_static_opacity_row: Control
+var _soc_enabled_cb: CheckBox
+var _soc_min_delta_spin: SpinBox
+var _soc_duration_spin: SpinBox
+var _soc_sub_rows: Control
 
 var _stat_mode: OptionButton
 var _stat_anchor: OptionButton
@@ -230,6 +238,23 @@ func build(vbox: VBoxContainer) -> void:
 	static_row.add_child(_vitals_static_opacity_spin)
 	vbox.add_child(static_row)
 	_vitals_static_opacity_row = static_row
+
+	_soc_enabled_cb = CheckBox.new()
+	_soc_enabled_cb.text = "Show on Change"
+	_soc_enabled_cb.focus_mode = Control.FOCUS_NONE
+	_soc_enabled_cb.toggled.connect(_on_soc_enabled_toggled)
+	vbox.add_child(_soc_enabled_cb)
+
+	var soc_sub := VBoxContainer.new()
+	soc_sub.add_theme_constant_override("separation", 4)
+	vbox.add_child(soc_sub)
+	_soc_sub_rows = soc_sub
+
+	_soc_min_delta_spin = _add_labeled_spin(soc_sub, "Min Drop to Trigger (%)", 1, 100, 0.5, 1)
+	_soc_min_delta_spin.value_changed.connect(_on_soc_field_changed)
+
+	_soc_duration_spin = _add_labeled_spin(soc_sub, "Visibility Duration (s)", 0.5, 30, 0.5, 1)
+	_soc_duration_spin.value_changed.connect(_on_soc_field_changed)
 
 	_grad_mode = _add_labeled_option(vbox, "Vital colors", ["Preset default", "White only", "Custom gradient"])
 	_grad_mode.item_selected.connect(_on_grad_mode_changed)
@@ -660,6 +685,26 @@ func build(vbox: VBoxContainer) -> void:
 	_crosshair_group_end_sep = null  ## No longer needed; crosshair is last group in Misc.
 
 	vbox.add_child(HSeparator.new())
+
+	_permadeath_icon_pos_opt = _add_labeled_option(
+		vbox,
+		"Permadeath Icon",
+		["Always Hide", "Top Left", "Top Center", "Top Right", "Left Center", "Right Center", "Bottom Left", "Bottom Center", "Bottom Right"]
+	)
+	_permadeath_icon_pos_opt.item_selected.connect(_on_permadeath_pos_changed)
+
+	var pd_sub := VBoxContainer.new()
+	pd_sub.add_theme_constant_override("separation", 4)
+	vbox.add_child(pd_sub)
+	_permadeath_icon_sub_rows = pd_sub
+
+	_permadeath_icon_scale_spin = _add_labeled_spin(pd_sub, "Icon Scale (%)", 10, 400, 5, 0)
+	_permadeath_icon_scale_spin.value_changed.connect(_on_misc_field_changed)
+
+	_permadeath_icon_alpha_spin = _add_labeled_spin(pd_sub, "Icon Transparency (%)", 0, 100, 1, 0)
+	_permadeath_icon_alpha_spin.value_changed.connect(_on_misc_field_changed)
+
+	vbox.add_child(HSeparator.new())
 	_misc_end_idx = vbox.get_child_count() - 1
 
 	sync_from_main()
@@ -831,6 +876,37 @@ func _mini_spin(row: HBoxContainer, letter: String, min_v: float, max_v: float) 
 	sp.focus_mode = Control.FOCUS_ALL
 	row.add_child(sp)
 	return sp
+
+
+const _PERMADEATH_POS_KEYS: Array = [
+	"always_hide", "top_left", "top_center", "top_right",
+	"left_center", "right_center",
+	"bottom_left", "bottom_center", "bottom_right"
+]
+
+func _update_permadeath_sub_rows_visibility() -> void:
+	if _permadeath_icon_sub_rows != null:
+		_permadeath_icon_sub_rows.visible = (
+			_permadeath_icon_pos_opt != null && _permadeath_icon_pos_opt.selected != 0
+		)
+
+
+func _on_permadeath_pos_changed(_idx: int) -> void:
+	_update_permadeath_sub_rows_visibility()
+	_apply_misc_from_ui()
+
+
+func _permadeath_pos_key_to_idx(key: String) -> int:
+	var k := key.strip_edges().to_lower()
+	if k == "hidden":
+		k = "always_hide"
+	var idx := _PERMADEATH_POS_KEYS.find(k)
+	return idx if idx >= 0 else 0  ## default: always_hide
+
+func _permadeath_pos_idx_to_key(idx: int) -> String:
+	if idx >= 0 && idx < _PERMADEATH_POS_KEYS.size():
+		return _PERMADEATH_POS_KEYS[idx]
+	return "always_hide"
 
 
 func _anchor_index_from_key(key: String) -> int:
@@ -1021,6 +1097,13 @@ func sync_from_main() -> void:
 				_fps_cluster_align_opt.select(2)
 			_:
 				_fps_cluster_align_opt.select(0)
+		if _permadeath_icon_pos_opt != null:
+			_permadeath_icon_pos_opt.select(_permadeath_pos_key_to_idx(str(misc.get("permadeath_icon_position", "always_hide"))))
+		if _permadeath_icon_scale_spin != null:
+			_permadeath_icon_scale_spin.set_value_no_signal(float(misc.get("permadeath_icon_scale_pct", 100.0)))
+		if _permadeath_icon_alpha_spin != null:
+			_permadeath_icon_alpha_spin.set_value_no_signal(clampf(float(misc.get("permadeath_icon_alpha", 1.0)) * 100.0, 0.0, 100.0))
+		_update_permadeath_sub_rows_visibility()
 	_update_misc_compass_rows_visibility()
 
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
@@ -1039,6 +1122,13 @@ func sync_from_main() -> void:
 		static_pct = 100.0
 	_vitals_static_opacity_spin.set_value_no_signal(static_pct)
 	_update_vitals_static_opacity_row_visibility()
+
+	if m.has_method(&"get_show_on_change_settings_for_ui"):
+		var soc: Dictionary = (m as Node).call(&"get_show_on_change_settings_for_ui")
+		_soc_enabled_cb.set_pressed_no_signal(bool(soc.get("show_on_change_enabled", false)))
+		_soc_min_delta_spin.set_value_no_signal(float(soc.get("show_on_change_min_delta_pct", 5.0)))
+		_soc_duration_spin.set_value_no_signal(float(soc.get("show_on_change_duration_sec", 4.0)))
+		_update_soc_sub_rows_visibility()
 
 	if m.has_method(&"get_simplehud_preset_dropdown_index_for_active"):
 		_preset_option.set_block_signals(true)
@@ -1217,7 +1307,10 @@ func _apply_misc_from_ui() -> void:
 		_encumbrance_cb.button_pressed,
 		_inventory_value_cb.button_pressed,
 		["top", "bottom", "left", "right"][_fps_cluster_justify_opt.selected],
-		["leading", "center", "trailing"][_fps_cluster_align_opt.selected]
+		["leading", "center", "trailing"][_fps_cluster_align_opt.selected],
+		_permadeath_pos_idx_to_key(_permadeath_icon_pos_opt.selected if _permadeath_icon_pos_opt != null else 0),
+		float(_permadeath_icon_scale_spin.value) if _permadeath_icon_scale_spin != null else 100.0,
+		clampf(float(_permadeath_icon_alpha_spin.value) / 100.0, 0.0, 1.0) if _permadeath_icon_alpha_spin != null else 1.0
 	)
 	_refresh_current_preset_label()
 
@@ -1257,6 +1350,35 @@ func _update_misc_compass_rows_visibility() -> void:
 func _update_vitals_static_opacity_row_visibility() -> void:
 	if _vitals_static_opacity_row != null:
 		_vitals_static_opacity_row.visible = _vitals_transparency_opt.selected == 1
+
+
+func _update_soc_sub_rows_visibility() -> void:
+	if _soc_sub_rows != null:
+		_soc_sub_rows.visible = _soc_enabled_cb != null && _soc_enabled_cb.button_pressed
+
+
+func _apply_show_on_change_from_ui() -> void:
+	if _ui_sync:
+		return
+	var mm := _simplehud_main()
+	if mm == null || !(mm as Object).has_method(&"apply_show_on_change_settings_from_ui"):
+		return
+	(mm as Node).call(
+		&"apply_show_on_change_settings_from_ui",
+		_soc_enabled_cb.button_pressed,
+		float(_soc_min_delta_spin.value),
+		float(_soc_duration_spin.value),
+	)
+	_refresh_current_preset_label()
+
+
+func _on_soc_enabled_toggled(_on: bool) -> void:
+	_update_soc_sub_rows_visibility()
+	_apply_show_on_change_from_ui()
+
+
+func _on_soc_field_changed(_v: float) -> void:
+	_apply_show_on_change_from_ui()
 
 
 func _on_vitals_transparency_changed(_idx: int) -> void:

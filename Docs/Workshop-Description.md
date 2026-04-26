@@ -5,8 +5,8 @@ SimpleHUD gives you a configurable HUD for Road to Vostok, using presets that ca
 
 ## 1.0.6 Update Highlights
 
-- **Show All Vitals** hold-key: hold to force all vitals visible at full opacity, regardless of thresholds or transparency settings — useful when you need a quick status check without changing your config.
-- **MCM release variant** (`SimpleUI-MCM.vmz`): optional build that integrates with **Mod Configuration Menu** by Doink Oink. Exposes Vitals, Ailments, Keybinds, and Misc settings directly inside the MCM menu. Requires MCM installed alongside it — standard `SimpleUI.vmz` is unchanged.
+- **Show All Vitals** hold-key: hold to force all vitals visible at full opacity, regardless of thresholds or transparency settings; useful when you need a quick status check without changing your config.
+- **MCM release variant** (`SimpleUI-MCM.vmz`): optional build that integrates with **Mod Configuration Menu** by Doink Oink. Exposes Vitals, Ailments, Keybinds, and Misc settings directly inside the MCM menu. Requires MCM installed alongside it; standard `SimpleUI.vmz` is unchanged.
 - **Internal performance pass**: per-frame node lookups, file reads, and array allocations are cached or rate-limited. Most notably: HUD child nodes cached at bind time, preferences file read only when mtime changes, fill-empty layout changes debounced at 200 ms.
 - **Cleaner defaults for new installs**: `Toggle HUD` and `Show All Vitals` are unassigned by default so players can bind keys that do not conflict with their setup.
 
@@ -23,7 +23,7 @@ SimpleHUD gives you a configurable HUD for Road to Vostok, using presets that ca
 - **Misc HUD behavior:** configure compass/crosshair options, FPS label visibility, and map-label mode (`default`, `map_only`, `region_only`).
 - **Runtime control:** bind `Toggle HUD` and/or `Show All Vitals` in Controls (or MCM in the MCM variant) to quickly hide HUD or temporarily reveal all vitals at full opacity.
 
-## In-Game Configuration (Main Menu — standard build)
+## In-Game Configuration (Main Menu; standard build)
 
 Open the game main menu and click **SimpleHUD**:
 

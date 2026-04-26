@@ -5,6 +5,7 @@ const STAT_WIDGET_SCRIPT := preload("res://SimpleHUD/widgets/StatWidget.gd")
 const STATUS_TRAY_SCRIPT := preload("res://SimpleHUD/widgets/StatusTray.gd")
 const COMPASS_STRIP_SCRIPT := preload("res://SimpleHUD/widgets/CompassStrip.gd")
 const CROSSHAIR_WIDGET_SCRIPT := preload("res://SimpleHUD/widgets/CrosshairWidget.gd")
+const PERMADEATH_ICON_SCRIPT := preload("res://SimpleHUD/widgets/PermadeathIcon.gd")
 
 ## Set true to print compass visibility reasons to the console (throttled).
 const SIMPLEHUD_COMPASS_DIAG := false
@@ -21,6 +22,7 @@ var _tray: STATUS_TRAY_SCRIPT
 var _compass: Control
 var _crosshair: Control
 var _crosshair_bloom_px: float = 0.0
+var _permadeath_icon: PERMADEATH_ICON_SCRIPT
 
 var _compass_diag_last_frame: int = -999999
 var _vitals_layout_diag_last_frame: int = -999999
@@ -97,6 +99,11 @@ const _FILL_LAYOUT_DEBOUNCE_USEC: int = 200000
 ## Status tray is intentionally NOT affected — binary ailment icons are meaningless when inactive.
 var _force_show_all: bool = false
 
+## Show on Change: per-stat last-known percent and expiry timestamps (ms from Time.get_ticks_msec()).
+## -1 expiry = not currently active.
+var _soc_last_pct: PackedFloat32Array = PackedFloat32Array()
+var _soc_expiry_ms: PackedInt64Array = PackedInt64Array()
+
 
 static var _cached_widget_defs: Array = []
 var _cached_stat_ids: Array[StringName] = []
@@ -158,6 +165,10 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_vit_scratch_alpha.resize(n_stats)
 	_vit_show.resize(n_stats)
 	_vit_radial.resize(n_stats)
+	_soc_last_pct.resize(n_stats)
+	_soc_expiry_ms.resize(n_stats)
+	_soc_last_pct.fill(-1.0)
+	_soc_expiry_ms.fill(-1)
 
 	_tray = STATUS_TRAY_SCRIPT.new()
 	_tray.setup(game_data, cfg)
@@ -173,6 +184,10 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_crosshair.setup(cfg)
 	_crosshair.z_index = 41
 	add_child(_crosshair)
+
+	_permadeath_icon = PERMADEATH_ICON_SCRIPT.new()
+	_permadeath_icon.setup(cfg)
+	add_child(_permadeath_icon)
 
 	mark_layout_dirty()
 
@@ -196,7 +211,11 @@ func apply_live_config(cfg: RefCounted) -> void:
 		(_compass as Node).call(&"setup", cfg)
 	if _crosshair != null && (_crosshair as Object).has_method(&"setup"):
 		(_crosshair as Node).call(&"setup", cfg)
+	if _permadeath_icon != null:
+		_permadeath_icon.setup(cfg)
 
+	_soc_last_pct.fill(-1.0)
+	_soc_expiry_ms.fill(-1)
 	mark_layout_dirty()
 
 
@@ -327,6 +346,9 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 		else:
 			_crosshair.visible = false
 
+	if _permadeath_icon != null:
+		_permadeath_icon.place(vp_size)
+
 	_store_layout_cache(vp_size, stats_visible)
 
 
@@ -396,6 +418,11 @@ func _vital_should_participate_in_layout(sid: StringName, w: Control) -> bool:
 	var th: float = float(_cfg.get_threshold(sid))
 	var show_stat: bool = true if th <= 0.0 else p <= th
 	if !show_stat:
+		## Show on Change can keep a vital visible even when it is above the display threshold.
+		var idx := SimpleHUDConfigScript.STAT_IDS.find(sid)
+		if idx >= 0 && idx < _soc_expiry_ms.size():
+			if _soc_expiry_ms[idx] >= 0 && Time.get_ticks_msec() <= _soc_expiry_ms[idx]:
+				return true
 		return false
 	var trans_mode: String = str(_cfg.get_vitals_transparency_mode())
 	var alpha: float = 1.0
@@ -899,6 +926,8 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 		## When status tray is hidden by config and already invisible, skip `refresh()` work entirely.
 		if str(_cfg.status_mode) != "hidden" || _tray.visible:
 			_tray.refresh()
+	if _permadeath_icon != null:
+		_permadeath_icon.tick(_game_data)
 	## Compass/crosshair are optional beta features: skip all per-frame chrome work when both are off (no GameData reads, no placement).
 	var chrome_on: bool = bool(_cfg.compass_enabled) || bool(_cfg.crosshair_enabled)
 	if chrome_on && viewport_px.x > 1.0 && viewport_px.y > 1.0:
@@ -915,11 +944,17 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 	)
 	var floor_q: int = int(round(clampf(float(_cfg.min_stat_alpha_floor), 0.0, 1.0) * 1000.0))
 
+	var soc_on: bool = bool(_cfg.show_on_change_enabled)
+	var soc_min_delta: float = clampf(float(_cfg.show_on_change_min_delta_pct), 0.0, 100.0)
+	var soc_dur_ms: int = int(round(clampf(float(_cfg.show_on_change_duration_sec), 0.0, 30.0) * 1000.0))
+	var now_ms: int = Time.get_ticks_msec() if soc_on else 0
+
 	var h: int = 2166136261
 	h = (h ^ hash(trans_mode)) * 16777619
 	h = (h ^ static_op_q) * 16777619
 	h = (h ^ floor_q) * 16777619
 	h = (h ^ (1 if _force_show_all else 0)) * 16777619
+	h = (h ^ (1 if soc_on else 0)) * 16777619
 
 	var idx: int = 0
 	for sid in _stat_ids():
@@ -936,7 +971,24 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 		var use_radial: bool = bool(_cfg.get_radial(sid))
 		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
 		var alpha: float = computed
+
+		## Show on Change: arm the expiry window when the stat drops by at least soc_min_delta.
+		var soc_active: bool = false
+		if soc_on && idx < _soc_last_pct.size():
+			var last_p: float = _soc_last_pct[idx]
+			if last_p >= 0.0 && (last_p - p) >= soc_min_delta:
+				_soc_expiry_ms[idx] = now_ms + soc_dur_ms
+			_soc_last_pct[idx] = p
+			if _soc_expiry_ms[idx] >= 0:
+				if now_ms <= _soc_expiry_ms[idx]:
+					soc_active = true
+				else:
+					_soc_expiry_ms[idx] = -1
+
 		if _force_show_all:
+			alpha = 1.0
+		elif soc_active:
+			show_stat = true
 			alpha = 1.0
 		elif show_stat:
 			match trans_mode:
@@ -955,6 +1007,7 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 		h = (h ^ (1 if show_stat else 0)) * 16777619
 		h = (h ^ (1 if use_radial else 0)) * 16777619
 		h = (h ^ int(round(th * 10.0))) * 16777619
+		h = (h ^ (1 if soc_active else 0)) * 16777619
 
 		_vit_scratch_p[idx] = p
 		_vit_scratch_alpha[idx] = alpha
@@ -966,17 +1019,26 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 	var lh: int = 2166136261
 	var fill_empty_layout: bool = bool(_cfg.vitals_fill_empty_space)
 	lh = (lh ^ (1 if fill_empty_layout else 0)) * 16777619
+	var any_soc_active_now: bool = false
 	for j in range(idx):
 		var active_layout: int = 1
 		if fill_empty_layout:
-			active_layout = 1 if (_vit_show[j] != 0 && _vit_scratch_alpha[j] > 0.001) else 0
+			var soc_lh_active: bool = (
+				soc_on && j < _soc_expiry_ms.size()
+				&& _soc_expiry_ms[j] >= 0 && now_ms <= _soc_expiry_ms[j]
+			)
+			if soc_lh_active:
+				any_soc_active_now = true
+			active_layout = 1 if (_vit_show[j] != 0 && _vit_scratch_alpha[j] > 0.001) || soc_lh_active else 0
 		lh = (lh ^ active_layout) * 16777619
 	if lh != _last_vitals_layout_hash:
 		## When fill-empty is on, stat values cross thresholds continuously during combat/sprinting,
 		## triggering a layout pass every frame. Gate these on a 200 ms debounce so layout only fires
-		## after the values have been stable for 1/5 s. Non-fill-empty changes (config edits) apply immediately.
+		## after the values have been stable for 1/5 s.
+		## Exception: SoC activation/expiry must reposition immediately so the vital appears in the
+		## correct location without a one-frame flash at (0,0).
 		var apply_now := true
-		if fill_empty_layout:
+		if fill_empty_layout && !any_soc_active_now:
 			if _fill_layout_debounce_usec < 0:
 				_fill_layout_debounce_usec = Time.get_ticks_usec()
 				apply_now = false

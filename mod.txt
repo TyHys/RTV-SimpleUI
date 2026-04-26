@@ -4,4 +4,5 @@ id="simple-hud"
 version="1.0.6"
 
 [autoload]
+SimpleHUDMCM="res://SimpleHUD/MCM/SimpleHUDMCMConfig.gd"
 SimpleHUDMain="res://SimpleHUD/Main.gd"

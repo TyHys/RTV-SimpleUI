@@ -1,8 +1,10 @@
 extends Node
 
 ## MCM (Mod Configuration Menu by Doink Oink) integration autoload for SimpleHUD.
-## Only included in SimpleUI-MCM.vmz. Suppresses the main-menu SimpleHUD button so MCM
-## is the single configuration surface (Engine.has_meta("SimpleHUD_UsesMCM") checked in Main.gd).
+## Always loaded. If MCM helpers are found at runtime, registers with MCM and sets
+## Engine.meta "SimpleHUD_UsesMCM" to suppress the main-menu button (MCM becomes the only
+## config surface). If MCM is absent the meta is never set, so Main.gd falls back to the
+## main-menu button as normal.
 
 const MOD_ID := "simple-hud"
 const SimpleHUDConfigScript := preload("res://SimpleHUD/SimpleHUDConfigCore.gd")
@@ -26,8 +28,6 @@ const _MCM_HELPER_PATHS := [
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	## Tells Main.gd to skip injecting the main-menu button — MCM is the config surface.
-	Engine.set_meta(&"SimpleHUD_UsesMCM", true)
 	## Ensure keybind actions exist early so MCM keycode update path has stable targets.
 	_ensure_keybind_actions_exist()
 	## Deferred so SimpleHUDMain has been added to the tree and registered its Engine meta.
@@ -45,8 +45,10 @@ func _process(_delta: float) -> void:
 func _register_with_mcm() -> void:
 	var helpers: Object = _load_mcm_helpers()
 	if helpers == null:
-		push_warning("SimpleHUD MCM: MCM_Helpers resource not found — MCM integration disabled. Install Mod Configuration Menu by Doink Oink alongside SimpleUI-MCM.vmz.")
+		## MCM not installed — fall back to main-menu button (no meta set, no warning needed).
 		return
+	## MCM helpers confirmed present: suppress the main-menu button and use MCM as the sole config surface.
+	Engine.set_meta(&"SimpleHUD_UsesMCM", true)
 
 	_ensure_mcm_config_file(helpers, _simplehud_main())
 
@@ -122,6 +124,14 @@ func _apply_mcm_config(config: ConfigFile) -> void:
 			float(_config_value(config, "Float", "vitals_static_opacity_pct", 75.0))
 		)
 
+	if main.has_method(&"apply_show_on_change_settings_from_ui"):
+		main.call(
+			&"apply_show_on_change_settings_from_ui",
+			bool(_config_value(config, "Bool", "show_on_change_enabled", false)),
+			float(_config_value(config, "Float", "show_on_change_min_delta_pct", 5.0)),
+			float(_config_value(config, "Float", "show_on_change_duration_sec", 4.0))
+		)
+
 	if main.has_method(&"apply_stat_settings_to_all_from_ui"):
 		var gradient_mode := str(_config_value(config, "Dropdown", "stat_gradient_mode", "preset"))
 		var stat_dict: Dictionary = {
@@ -183,7 +193,10 @@ func _apply_mcm_config(config: ConfigFile) -> void:
 			bool(_config_value(config, "Bool", "show_encumbrance_pct", false)),
 			bool(_config_value(config, "Bool", "show_inventory_value", false)),
 			str(_config_value(config, "Dropdown", "fps_map_cluster_justify", "top")),
-			str(_config_value(config, "Dropdown", "fps_map_cluster_alignment", "leading"))
+			str(_config_value(config, "Dropdown", "fps_map_cluster_alignment", "leading")),
+			str(_config_value(config, "Dropdown", "permadeath_icon_position", "always_hide")),
+			float(_config_value(config, "Float", "permadeath_icon_scale_pct", 100.0)),
+			clampf(float(_config_value(config, "Float", "permadeath_icon_alpha", 100.0)) / 100.0, 0.0, 1.0)
 		)
 
 	## Keybind actions are managed by MCM_Helpers (LoadInput/UpdateInputs). Avoid mutating InputMap
@@ -223,6 +236,7 @@ func _build_default_mcm_config(main: Node) -> ConfigFile:
 	var strip: Dictionary = {}
 	var stat: Dictionary = {}
 	var misc: Dictionary = {}
+	var soc: Dictionary = {}
 	var active_preset := ""
 	if main != null:
 		if main.has_method(&"get_status_tray_settings_for_ui"):
@@ -233,6 +247,8 @@ func _build_default_mcm_config(main: Node) -> ConfigFile:
 			stat = main.call(&"get_vitals_common_settings_for_ui")
 		if main.has_method(&"get_misc_settings_for_ui"):
 			misc = main.call(&"get_misc_settings_for_ui")
+		if main.has_method(&"get_show_on_change_settings_for_ui"):
+			soc = main.call(&"get_show_on_change_settings_for_ui")
 		if main.has_method(&"get_simplehud_active_preset_id"):
 			active_preset = str(main.call(&"get_simplehud_active_preset_id"))
 
@@ -337,6 +353,33 @@ func _build_default_mcm_config(main: Node) -> ConfigFile:
 		"minRange": 1.0,
 		"maxRange": 100.0,
 		"step": 1.0,
+		"category": "Vitals",
+	})
+	cfg.set_value("Bool", "show_on_change_enabled", {
+		"name": "Show on Change",
+		"tooltip": "When a vital drops by at least the minimum change amount, keep it fully visible for the specified duration.",
+		"default": bool(soc.get("show_on_change_enabled", false)),
+		"value": bool(soc.get("show_on_change_enabled", false)),
+		"category": "Vitals",
+	})
+	cfg.set_value("Float", "show_on_change_min_delta_pct", {
+		"name": "Show on Change: Min Drop (%)",
+		"tooltip": "Minimum % drop required to trigger the visibility window.",
+		"default": float(soc.get("show_on_change_min_delta_pct", 5.0)),
+		"value": float(soc.get("show_on_change_min_delta_pct", 5.0)),
+		"minRange": 1.0,
+		"maxRange": 100.0,
+		"step": 0.5,
+		"category": "Vitals",
+	})
+	cfg.set_value("Float", "show_on_change_duration_sec", {
+		"name": "Show on Change: Duration (s)",
+		"tooltip": "Seconds to keep the vital visible after a qualifying drop.",
+		"default": float(soc.get("show_on_change_duration_sec", 4.0)),
+		"value": float(soc.get("show_on_change_duration_sec", 4.0)),
+		"minRange": 0.5,
+		"maxRange": 30.0,
+		"step": 0.5,
 		"category": "Vitals",
 	})
 	var grad_mode := str(stat.get("gradient_mode", "preset"))
@@ -492,24 +535,55 @@ func _build_default_mcm_config(main: Node) -> ConfigFile:
 		"category": "FPS / Map",
 	})
 
-	## ── Equipment ─────────────────────────────────────────────────────────────
+	## ── Vitals (equipment vitals toggles at end) ──────────────────────────────
 	cfg.set_value("Bool", "vital_helmet_enabled", {
 		"name": "Show Helmet Vital",
 		"default": bool(misc.get("vital_helmet_enabled", false)),
 		"value": bool(misc.get("vital_helmet_enabled", false)),
-		"category": "Equipment",
+		"category": "Vitals",
 	})
 	cfg.set_value("Bool", "vital_cat_enabled", {
 		"name": "Show Cat Vital",
 		"default": bool(misc.get("vital_cat_enabled", false)),
 		"value": bool(misc.get("vital_cat_enabled", false)),
-		"category": "Equipment",
+		"category": "Vitals",
 	})
 	cfg.set_value("Bool", "vital_plate_enabled", {
 		"name": "Show Plate Vital",
 		"default": bool(misc.get("vital_plate_enabled", false)),
 		"value": bool(misc.get("vital_plate_enabled", false)),
-		"category": "Equipment",
+		"category": "Vitals",
+	})
+
+	cfg.set_value("Dropdown", "permadeath_icon_position", {
+		"name": "Permadeath Icon",
+		"default": str(misc.get("permadeath_icon_position", "always_hide")),
+		"value": str(misc.get("permadeath_icon_position", "always_hide")),
+		"options": {
+			"always_hide": "Always Hide",
+			"top_left": "Top Left", "top_center": "Top Center", "top_right": "Top Right",
+			"left_center": "Left Center", "right_center": "Right Center",
+			"bottom_left": "Bottom Left", "bottom_center": "Bottom Center", "bottom_right": "Bottom Right",
+		},
+		"category": "Misc",
+	})
+	cfg.set_value("Float", "permadeath_icon_scale_pct", {
+		"name": "Icon Scale (%)",
+		"default": float(misc.get("permadeath_icon_scale_pct", 100.0)),
+		"value": float(misc.get("permadeath_icon_scale_pct", 100.0)),
+		"minRange": 10.0,
+		"maxRange": 400.0,
+		"step": 5.0,
+		"category": "Misc",
+	})
+	cfg.set_value("Float", "permadeath_icon_alpha", {
+		"name": "Icon Transparency (%)",
+		"default": clampf(float(misc.get("permadeath_icon_alpha", 1.0)) * 100.0, 0.0, 100.0),
+		"value": clampf(float(misc.get("permadeath_icon_alpha", 1.0)) * 100.0, 0.0, 100.0),
+		"minRange": 0.0,
+		"maxRange": 100.0,
+		"step": 1.0,
+		"category": "Misc",
 	})
 
 	## ── Misc (Compass + Crosshair) ────────────────────────────────────────────
@@ -611,16 +685,15 @@ func _build_default_mcm_config(main: Node) -> ConfigFile:
 	cfg.set_value("Category", "Vitals",     {"menu_pos": 1})
 	cfg.set_value("Category", "Ailments",   {"menu_pos": 2})
 	cfg.set_value("Category", "FPS / Map",  {"menu_pos": 3})
-	cfg.set_value("Category", "Equipment",  {"menu_pos": 4})
-	cfg.set_value("Category", "Misc",       {"menu_pos": 5})
-	cfg.set_value("Category", "Keybinds",   {"menu_pos": 6})
+	cfg.set_value("Category", "Misc",       {"menu_pos": 4})
+	cfg.set_value("Category", "Keybinds",   {"menu_pos": 5})
 	_apply_menu_order(cfg)
 	return cfg
 
 
 func _apply_menu_order(cfg: ConfigFile) -> void:
 	var pos := 10
-	## Presets → Vitals → Ailments → FPS/Map → Equipment → Misc → Keybinds.
+	## Presets → Vitals → Ailments → FPS/Map → Misc → Keybinds.
 	## Within Vitals/Ailments/FPS-Map: Display/Mode → Edge → Edge Margin → Alignment →
 	##   Spacing → Fill Empty Space → Scale → [section-specific] → Colors.
 	for entry in [
@@ -638,6 +711,9 @@ func _apply_menu_order(cfg: ConfigFile) -> void:
 		["Float",    "stat_visible_threshold_pct"],
 		["Dropdown", "vitals_transparency_mode"],
 		["Float",    "vitals_static_opacity_pct"],
+		["Bool",     "show_on_change_enabled"],
+		["Float",    "show_on_change_min_delta_pct"],
+		["Float",    "show_on_change_duration_sec"],
 		["Dropdown", "stat_gradient_mode"],
 		["Float",    "stat_gradient_high_pct"],
 		["Float",    "stat_gradient_mid_pct"],
@@ -651,6 +727,9 @@ func _apply_menu_order(cfg: ConfigFile) -> void:
 		["Int",      "stat_gradient_low_r"],
 		["Int",      "stat_gradient_low_g"],
 		["Int",      "stat_gradient_low_b"],
+		["Bool",     "vital_helmet_enabled"],
+		["Bool",     "vital_cat_enabled"],
+		["Bool",     "vital_plate_enabled"],
 		## Ailments
 		["Bool",     "status_auto_hide"],
 		["Dropdown", "status_anchor"],
@@ -673,11 +752,10 @@ func _apply_menu_order(cfg: ConfigFile) -> void:
 		["Dropdown", "fps_map_cluster_alignment"],
 		["Bool",     "show_encumbrance_pct"],
 		["Bool",     "show_inventory_value"],
-		## Equipment
-		["Bool",     "vital_helmet_enabled"],
-		["Bool",     "vital_cat_enabled"],
-		["Bool",     "vital_plate_enabled"],
-		## Misc — compass then crosshair (color RGB kept with its group)
+		## Misc — permadeath icon, then compass, then crosshair
+		["Dropdown", "permadeath_icon_position"],
+		["Float",    "permadeath_icon_scale_pct"],
+		["Float",    "permadeath_icon_alpha"],
 		["Bool",     "compass_enabled"],
 		["Dropdown", "compass_anchor"],
 		["Float",    "compass_alpha_pct"],

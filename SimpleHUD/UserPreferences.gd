@@ -80,6 +80,9 @@ static func _build_general(cfg: RefCounted) -> Dictionary:
 		"numeric_only": bool(cfg.numeric_only),
 		"stamina_fatigue_near_zero_cutoff": float(cfg.stamina_fatigue_near_zero_cutoff),
 		"active_preset": str(cfg.get_meta(&"simplehud_active_preset", "")),
+		"show_on_change_enabled": bool(cfg.show_on_change_enabled),
+		"show_on_change_min_delta_pct": float(cfg.show_on_change_min_delta_pct),
+		"show_on_change_duration_sec": float(cfg.show_on_change_duration_sec),
 	}
 
 
@@ -160,6 +163,9 @@ static func _build_misc(cfg: RefCounted) -> Dictionary:
 		"show_inventory_value": bool(cfg.fps_map_show_inventory_value),
 		"fps_map_cluster_justify": str(cfg.fps_map_cluster_justify),
 		"fps_map_cluster_alignment": str(cfg.fps_map_cluster_alignment),
+		"permadeath_icon_position": str(cfg.permadeath_icon_position),
+		"permadeath_icon_scale_pct": float(cfg.permadeath_icon_scale_pct),
+		"permadeath_icon_alpha": float(cfg.permadeath_icon_alpha),
 	}
 
 
@@ -212,6 +218,12 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.stamina_fatigue_near_zero_cutoff = clampf(float(g["stamina_fatigue_near_zero_cutoff"]), 0.0, 5.0)
 		if g.has("active_preset"):
 			cfg.set_meta(&"simplehud_active_preset", str(g["active_preset"]))
+		if g.has("show_on_change_enabled"):
+			cfg.show_on_change_enabled = bool(g["show_on_change_enabled"])
+		if g.has("show_on_change_min_delta_pct"):
+			cfg.show_on_change_min_delta_pct = clampf(float(g["show_on_change_min_delta_pct"]), 0.0, 100.0)
+		if g.has("show_on_change_duration_sec"):
+			cfg.show_on_change_duration_sec = clampf(float(g["show_on_change_duration_sec"]), 0.0, 30.0)
 
 	if d.has("vitals_layout"):
 		var vl := _as_dict(d["vitals_layout"])
@@ -343,6 +355,12 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 			cfg.fps_map_cluster_justify = str(mx["fps_map_cluster_justify"]).strip_edges().to_lower()
 		if mx.has("fps_map_cluster_alignment"):
 			cfg.fps_map_cluster_alignment = str(mx["fps_map_cluster_alignment"]).strip_edges().to_lower()
+		if mx.has("permadeath_icon_position"):
+			cfg.permadeath_icon_position = cfg._normalize_permadeath_position(str(mx["permadeath_icon_position"]))
+		if mx.has("permadeath_icon_scale_pct"):
+			cfg.permadeath_icon_scale_pct = clampf(float(mx["permadeath_icon_scale_pct"]), 10.0, 400.0)
+		if mx.has("permadeath_icon_alpha"):
+			cfg.permadeath_icon_alpha = clampf(float(mx["permadeath_icon_alpha"]), 0.0, 1.0)
 
 	if d.has("fps_map"):
 		var fm := _as_dict(d["fps_map"])
