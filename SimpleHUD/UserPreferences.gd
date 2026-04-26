@@ -153,6 +153,13 @@ static func _build_misc(cfg: RefCounted) -> Dictionary:
 		"crosshair_hide_while_stowed": bool(cfg.crosshair_hide_while_stowed),
 		"fps_hide_label_prefix": bool(cfg.fps_hide_label_prefix),
 		"map_label_mode": str(cfg.map_label_mode),
+		"vital_helmet_enabled": bool(cfg.misc_vital_helmet_enabled),
+		"vital_cat_enabled": bool(cfg.misc_vital_cat_enabled),
+		"vital_plate_enabled": bool(cfg.misc_vital_plate_enabled),
+		"show_encumbrance_pct": bool(cfg.fps_map_show_encumbrance_pct),
+		"show_inventory_value": bool(cfg.fps_map_show_inventory_value),
+		"fps_map_cluster_justify": str(cfg.fps_map_cluster_justify),
+		"fps_map_cluster_alignment": str(cfg.fps_map_cluster_alignment),
 	}
 
 
@@ -322,6 +329,20 @@ static func _merge_root(cfg: RefCounted, d: Dictionary) -> void:
 					cfg.map_label_mode = mm
 				_:
 					cfg.map_label_mode = "default"
+		if mx.has("vital_helmet_enabled"):
+			cfg.misc_vital_helmet_enabled = bool(mx["vital_helmet_enabled"])
+		if mx.has("vital_cat_enabled"):
+			cfg.misc_vital_cat_enabled = bool(mx["vital_cat_enabled"])
+		if mx.has("vital_plate_enabled"):
+			cfg.misc_vital_plate_enabled = bool(mx["vital_plate_enabled"])
+		if mx.has("show_encumbrance_pct"):
+			cfg.fps_map_show_encumbrance_pct = bool(mx["show_encumbrance_pct"])
+		if mx.has("show_inventory_value"):
+			cfg.fps_map_show_inventory_value = bool(mx["show_inventory_value"])
+		if mx.has("fps_map_cluster_justify"):
+			cfg.fps_map_cluster_justify = str(mx["fps_map_cluster_justify"]).strip_edges().to_lower()
+		if mx.has("fps_map_cluster_alignment"):
+			cfg.fps_map_cluster_alignment = str(mx["fps_map_cluster_alignment"]).strip_edges().to_lower()
 
 	if d.has("fps_map"):
 		var fm := _as_dict(d["fps_map"])

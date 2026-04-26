@@ -85,6 +85,9 @@ const STAT_MENTAL := &"mental"
 const STAT_BODY_TEMP := &"body_temp"
 const STAT_STAMINA := &"stamina"
 const STAT_FATIGUE := &"fatigue"
+const STAT_HELMET := &"helmet"
+const STAT_CAT := &"cat"
+const STAT_PLATE := &"plate"
 
 const STAT_IDS: Array[StringName] = [
 	STAT_HEALTH,
@@ -94,6 +97,9 @@ const STAT_IDS: Array[StringName] = [
 	STAT_BODY_TEMP,
 	STAT_STAMINA,
 	STAT_FATIGUE,
+	STAT_HELMET,
+	STAT_CAT,
+	STAT_PLATE,
 ]
 
 var enabled: bool = true
@@ -151,6 +157,15 @@ var crosshair_hide_while_stowed: bool = false
 var fps_hide_label_prefix: bool = true
 ## "default" | "map_only" | "region_only"
 var map_label_mode: String = "default"
+var misc_vital_helmet_enabled: bool = false
+var misc_vital_cat_enabled: bool = false
+var misc_vital_plate_enabled: bool = false
+var fps_map_show_encumbrance_pct: bool = false
+var fps_map_show_inventory_value: bool = false
+## Which edge to dock FPS/map cluster to: top|bottom|left|right
+var fps_map_cluster_justify: String = "top"
+## Placement along chosen edge: leading|trailing|top|bottom|left|right|center
+var fps_map_cluster_alignment: String = "leading"
 
 var fps_map_alpha: float = 0.5
 var fps_map_scale: float = 0.81
@@ -349,6 +364,20 @@ func _apply_config_file(cf: ConfigFile, _merge: bool) -> void:
 					map_label_mode = mm
 				_:
 					map_label_mode = "default"
+		if cf.has_section_key("misc", "vital_helmet_enabled"):
+			misc_vital_helmet_enabled = bool(cf.get_value("misc", "vital_helmet_enabled"))
+		if cf.has_section_key("misc", "vital_cat_enabled"):
+			misc_vital_cat_enabled = bool(cf.get_value("misc", "vital_cat_enabled"))
+		if cf.has_section_key("misc", "vital_plate_enabled"):
+			misc_vital_plate_enabled = bool(cf.get_value("misc", "vital_plate_enabled"))
+		if cf.has_section_key("misc", "show_encumbrance_pct"):
+			fps_map_show_encumbrance_pct = bool(cf.get_value("misc", "show_encumbrance_pct"))
+		if cf.has_section_key("misc", "show_inventory_value"):
+			fps_map_show_inventory_value = bool(cf.get_value("misc", "show_inventory_value"))
+		if cf.has_section_key("misc", "fps_map_cluster_justify"):
+			fps_map_cluster_justify = _normalize_cluster_edge(str(cf.get_value("misc", "fps_map_cluster_justify")))
+		if cf.has_section_key("misc", "fps_map_cluster_alignment"):
+			fps_map_cluster_alignment = _normalize_cluster_alignment(str(cf.get_value("misc", "fps_map_cluster_alignment")))
 
 	if cf.has_section("fps_map"):
 		if cf.has_section_key("fps_map", "alpha"):
@@ -475,6 +504,13 @@ func apply_defaults() -> void:
 	crosshair_hide_while_stowed = false
 	fps_hide_label_prefix = true
 	map_label_mode = "default"
+	misc_vital_helmet_enabled = false
+	misc_vital_cat_enabled = false
+	misc_vital_plate_enabled = false
+	fps_map_show_encumbrance_pct = false
+	fps_map_show_inventory_value = false
+	fps_map_cluster_justify = "top"
+	fps_map_cluster_alignment = "leading"
 	status_inactive_r = status_color_r
 	status_inactive_g = status_color_g
 	status_inactive_b = status_color_b
@@ -675,3 +711,29 @@ func get_radial(stat_id: StringName) -> bool:
 
 func get_threshold(stat_id: StringName) -> float:
 	return float(visible_threshold.get(stat_id, 79.0))
+
+
+func _normalize_cluster_edge(s: String) -> String:
+	match s.strip_edges().to_lower():
+		"top", "t":
+			return "top"
+		"bottom", "b":
+			return "bottom"
+		"left", "l":
+			return "left"
+		"right", "r":
+			return "right"
+		_:
+			return "top"
+
+
+func _normalize_cluster_alignment(s: String) -> String:
+	match s.strip_edges().to_lower():
+		"center", "centre", "middle":
+			return "center"
+		"trailing", "trail", "end", "right", "bottom":
+			return "trailing"
+		"top", "left", "leading", "lead", "start":
+			return "leading"
+		_:
+			return "leading"

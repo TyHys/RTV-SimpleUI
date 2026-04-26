@@ -10,6 +10,9 @@ const STAT_ICON_PATHS := {
 	&"body_temp": "res://SimpleHUD/icons/temperature_icon.png",
 	&"stamina": "res://SimpleHUD/icons/stamina_icon.png",
 	&"fatigue": "res://SimpleHUD/icons/fatigue_icon.png",
+	&"helmet": "res://SimpleHUD/icons/helmet_icon.png",
+	&"cat": "res://SimpleHUD/icons/cat_icon.png",
+	&"plate": "res://SimpleHUD/icons/chestplate_icon.png",
 }
 
 var stat_id: StringName

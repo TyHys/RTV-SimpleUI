@@ -8,9 +8,18 @@ const SimpleHudOverlay := preload("res://SimpleHUD/HudOverlay.gd")
 const UserPreferencesScript := preload("res://SimpleHUD/UserPreferences.gd")
 const SimpleHUDSettingsPanelScript := preload("res://SimpleHUD/SimpleHUDSettingsPanel.gd")
 const SimpleHUDPresetsReg := preload("res://SimpleHUD/PresetsRegistry.gd")
+const _HUD_TEXT_FONT := preload("res://Fonts/Lora-Regular.ttf")
+const _HUD_EXTRA_TEXT_FONT := preload("res://Fonts/Lora-SemiBold.ttf")
+const _HUD_WEIGHT_ICON_PATHS := [
+	"res://SimpleHUD/icons/weight_icon.png",
+	"res://SimpleHUD/SimpleHUD/icons/weight_icon.png",
+	"res://UI/Sprites/Icon_Overweight.png",
+]
 
 ## Set true to enable verbose console diagnostics during development.
 const SIMPLEHUD_DIAG_LOG := false
+## Exhaustive FPS/Map diagnostics for runtime troubleshooting.
+const SIMPLEHUD_FPSMAP_DIAG_LOG := true
 
 ## Verbose diagnostics for main-menu SimpleHUD overlay (sizes, visibility, deferred layout).
 const SIMPLEHUD_MENU_PANEL_DIAG := false
@@ -24,8 +33,11 @@ var _overlay: SimpleHudOverlay
 ## Runtime `GameData` the game mutates (often not the same object identity as preload if the scene holds a live ref).
 var _live_game_data: Resource = null
 var _prefs_cache: Resource = null
-var _prefs_cache_frame: int = -10000
-const _PREFS_CACHE_TTL_FRAMES := 30
+## mtime of user://Preferences.tres at last successful load; -1 = never loaded.
+var _prefs_cache_mtime: int = -1
+## Frame at which we next check the mtime (rate-limits the stat() syscall to ~30 fps).
+var _prefs_mtime_next_check_frame: int = 0
+const _PREFS_MTIME_CHECK_INTERVAL_FRAMES := 30
 
 var _logged_overlay_missing_refresh: bool = false
 var _hud_force_hidden: bool = false
@@ -48,6 +60,39 @@ var _fps_map_c_scale: float = 0.0
 var _fps_map_c_ox: float = 0.0
 var _fps_map_c_oy: float = 0.0
 var _fps_map_c_alpha: float = -1.0
+var _fps_map_extra_label: Label = null
+var _fps_map_extra_weight_icon: TextureRect = null
+var _fps_map_weight_icon_texture: Texture2D = null
+var _fps_map_weight_icon_resolved: bool = false
+var _fps_map_extra_show_weight_icon: bool = false
+var _fps_map_prev_menu_open: bool = false
+var _fps_map_prev_show_fps: bool = true
+var _fps_map_prev_show_map: bool = true
+var _fps_map_prev_iface_ok: bool = false
+var _ui_interface_node: Node = null
+var _ui_next_probe_frame: int = 0
+const _UI_PROBE_INTERVAL_FRAMES := 30
+var _fps_extra_next_update_frame: int = 0
+const _FPS_EXTRA_UPDATE_INTERVAL_FRAMES := 15
+var _fps_extra_last_text: String = ""
+## Fixed pixel gap between the core Info block and the extra encumbrance/value lines.
+const _FPS_MAP_EXTRA_SEP_PX := 4.0
+const _FPS_MAP_ICON_GAP_PX := 2.0
+const _FPS_MAP_ICON_SIDE_PX := 12.0
+
+## Cached once the toggle_hud / show_all_vitals actions are confirmed registered.
+var _toggle_hud_action_ready: bool = false
+var _show_all_vitals_action_ready: bool = false
+## Cached after binding to avoid get_node_or_null calls on every frame tick.
+var _hud_vitals_node: Control = null
+var _hud_medical_node: Control = null
+var _hud_info_node: Control = null
+var _hud_map_label: Label = null
+## Cached after the first successful keybinding-UI tree scan — avoids full DFS every 90 frames once found.
+var _binding_ui_node: Node = null
+## Prevent repeated CreateActions() rebuilds from wiping custom binds.
+var _binding_ui_actions_injected: bool = false
+
 var _next_menu_install_probe_frame: int = 0
 const _MENU_INSTALL_PROBE_INTERVAL_FRAMES := 30
 
@@ -61,7 +106,8 @@ const SIMPLEHUD_MENU_MAX_HEIGHT := 920.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_ensure_toggle_hud_action()
+	if !_uses_mcm_config_surface():
+		_ensure_toggle_hud_action()
 	_cfg = SimpleHUDConfigScript.new()
 	_cfg.load_all()
 	UserPreferencesScript.merge_into(_cfg)
@@ -140,6 +186,86 @@ func close_simplehud_menu_panel() -> void:
 func log_diag(msg: String) -> void:
 	if SIMPLEHUD_DIAG_LOG:
 		print("[SimpleHUD] ", msg)
+
+
+func log_fpsmap_diag(msg: String) -> void:
+	if SIMPLEHUD_FPSMAP_DIAG_LOG:
+		print("[SimpleHUD][FPSMAP] ", msg)
+
+
+func _fpsmap_label_style_diag(lb: Label) -> String:
+	if lb == null || !is_instance_valid(lb):
+		return "<null>"
+	var fnt: Font = lb.get_theme_font("font")
+	var fsz: int = lb.get_theme_font_size("font_size")
+	if fsz <= 0:
+		fsz = 16
+	var line_h := -1.0
+	if fnt != null:
+		line_h = fnt.get_height(fsz)
+	return "name=%s vis=%s in_tree=%s pos=%s size=%s min=%s mod=%s font=%s fsz=%d line_h=%.2f text=\"%s\"" % [
+		lb.name,
+		lb.visible,
+		lb.is_visible_in_tree(),
+		lb.position,
+		lb.size,
+		lb.get_combined_minimum_size(),
+		lb.modulate,
+		"<null>" if fnt == null else str(fnt),
+		fsz,
+		line_h,
+		lb.text,
+	]
+
+
+func _fpsmap_dump_cluster_snapshot(stage: String, info: Control, hud: Control, show_fps: bool, show_map: bool, ox: float, oy: float, sc: float, alpha: float) -> void:
+	if !SIMPLEHUD_FPSMAP_DIAG_LOG:
+		return
+	if info == null || !is_instance_valid(info):
+		log_fpsmap_diag("snapshot stage=%s info=<null>" % [stage])
+		return
+	var vp := get_viewport()
+	var vp_size := vp.get_visible_rect().size if vp != null else Vector2.ZERO
+	var core_sz := _fps_map_info_only_size(info)
+	var visual_sz := _fps_map_cluster_visual_size(info)
+	var info_gr := info.get_global_rect()
+	var extra_gr := Rect2()
+	if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label):
+		extra_gr = _fps_map_extra_label.get_global_rect()
+	var icon_gr := Rect2()
+	if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+		icon_gr = _fps_map_extra_weight_icon.get_global_rect()
+	log_fpsmap_diag(
+		"snapshot stage=%s menu_open=%s show_fps=%s show_map=%s hud_ok=%s iface_ok=%s edge=%s align=%s cfg_off=(%.1f,%.1f) cfg_scale=%.3f cfg_alpha=%.3f vp=%s info_pos=%s info_scale=%s core_sz=%s visual_sz=%s info_gr=[%s..%s] extra_gr=[%s..%s] icon_gr=[%s..%s] extra_vis=%s icon_vis=%s extra_text=\"%s\""
+		% [
+			stage,
+			_game_data_menu_open(_live_game_data),
+			show_fps,
+			show_map,
+			hud != null && is_instance_valid(hud),
+			_ui_interface_node != null && is_instance_valid(_ui_interface_node),
+			_normalize_cluster_edge(str(_cfg.fps_map_cluster_justify)),
+			_normalize_cluster_alignment(str(_cfg.fps_map_cluster_alignment)),
+			ox,
+			oy,
+			sc,
+			alpha,
+			vp_size,
+			info.position,
+			info.scale,
+			core_sz,
+			visual_sz,
+			info_gr.position,
+			info_gr.position + info_gr.size,
+			extra_gr.position,
+			extra_gr.position + extra_gr.size,
+			icon_gr.position,
+			icon_gr.position + icon_gr.size,
+			_fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label) && _fps_map_extra_label.visible,
+			_fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon) && _fps_map_extra_weight_icon.visible,
+			_fps_extra_last_text,
+		]
+	)
 
 
 func log_menu_panel_diag(msg: String) -> void:
@@ -277,6 +403,8 @@ func _overlay_layout_size_px(gameplay_hud: Control) -> Vector2:
 
 ## Injects a "SimpleHUD" `res://Scenes/Menu.tscn` — `Main/Buttons` (sibling to "New", "Load game", …) and a full-screen settings layer. See `Auxillary/References/.../Scripts/Menu.gd` + `Scenes/Menu.tscn`.
 func _try_install_simplehud_main_menu() -> void:
+	if Engine.has_meta(&"SimpleHUD_UsesMCM"):
+		return
 	var tree := get_tree()
 	if tree == null:
 		return
@@ -533,6 +661,13 @@ func get_misc_settings_for_ui() -> Dictionary:
 		"crosshair_hide_while_stowed": bool(_cfg.crosshair_hide_while_stowed),
 		"fps_hide_label_prefix": bool(_cfg.fps_hide_label_prefix),
 		"map_label_mode": str(_cfg.map_label_mode),
+		"vital_helmet_enabled": bool(_cfg.misc_vital_helmet_enabled),
+		"vital_cat_enabled": bool(_cfg.misc_vital_cat_enabled),
+		"vital_plate_enabled": bool(_cfg.misc_vital_plate_enabled),
+		"show_encumbrance_pct": bool(_cfg.fps_map_show_encumbrance_pct),
+		"show_inventory_value": bool(_cfg.fps_map_show_inventory_value),
+		"fps_map_cluster_justify": str(_cfg.fps_map_cluster_justify),
+		"fps_map_cluster_alignment": str(_cfg.fps_map_cluster_alignment),
 	}
 
 
@@ -555,6 +690,13 @@ func apply_misc_settings_from_ui(
 	crosshair_hide_while_stowed: bool,
 	fps_hide_label_prefix: bool,
 	map_label_mode: String,
+	vital_helmet_enabled: bool = false,
+	vital_cat_enabled: bool = false,
+	vital_plate_enabled: bool = false,
+	show_encumbrance_pct: bool = false,
+	show_inventory_value: bool = false,
+	fps_map_cluster_justify: String = "top",
+	fps_map_cluster_alignment: String = "leading",
 ) -> void:
 	_cfg.compass_enabled = compass_enabled
 	_cfg.compass_anchor = "bottom" if str(compass_anchor).to_lower() == "bottom" else "top"
@@ -574,6 +716,13 @@ func apply_misc_settings_from_ui(
 	_cfg.crosshair_hide_during_aiming = crosshair_hide_during_aiming
 	_cfg.crosshair_hide_while_stowed = crosshair_hide_while_stowed
 	_cfg.fps_hide_label_prefix = fps_hide_label_prefix
+	_cfg.misc_vital_helmet_enabled = vital_helmet_enabled
+	_cfg.misc_vital_cat_enabled = vital_cat_enabled
+	_cfg.misc_vital_plate_enabled = vital_plate_enabled
+	_cfg.fps_map_show_encumbrance_pct = show_encumbrance_pct
+	_cfg.fps_map_show_inventory_value = show_inventory_value
+	_cfg.fps_map_cluster_justify = _normalize_cluster_edge(fps_map_cluster_justify)
+	_cfg.fps_map_cluster_alignment = _normalize_cluster_alignment(fps_map_cluster_alignment)
 	var mm := str(map_label_mode).to_lower()
 	match mm:
 		"map_only", "region_only":
@@ -581,8 +730,35 @@ func apply_misc_settings_from_ui(
 		_:
 			_cfg.map_label_mode = "default"
 	_fps_info_node = null
+	_fps_map_cached_info = null
 	UserPreferencesScript.persist_preferences_json(_cfg)
 	refresh_hud_layout()
+
+
+func _normalize_cluster_edge(s: String) -> String:
+	match s.strip_edges().to_lower():
+		"top", "t":
+			return "top"
+		"bottom", "b":
+			return "bottom"
+		"left", "l":
+			return "left"
+		"right", "r":
+			return "right"
+		_:
+			return "top"
+
+
+func _normalize_cluster_alignment(s: String) -> String:
+	match s.strip_edges().to_lower():
+		"center", "centre", "middle":
+			return "center"
+		"trailing", "trail", "end", "right", "bottom":
+			return "trailing"
+		"top", "left", "leading", "lead", "start":
+			return "leading"
+		_:
+			return "leading"
 
 
 func get_simplehud_active_preset_id() -> String:
@@ -861,8 +1037,10 @@ func _refresh_hud_layout_impl() -> void:
 
 
 func _process(delta: float) -> void:
-	_ensure_toggle_hud_action()
-	if Input.is_action_just_pressed("toggle_hud"):
+	if !_uses_mcm_config_surface():
+		_ensure_toggle_hud_action()
+		_ensure_show_all_vitals_action()
+	if InputMap.has_action("toggle_hud") && Input.is_action_just_pressed("toggle_hud"):
 		_hud_force_hidden = !_hud_force_hidden
 		refresh_hud_layout()
 
@@ -872,18 +1050,20 @@ func _process(delta: float) -> void:
 		_try_install_simplehud_main_menu()
 	if frame >= _next_toggle_hud_bind_probe_frame:
 		_next_toggle_hud_bind_probe_frame = frame + _TOGGLE_HUD_BIND_PROBE_INTERVAL_FRAMES
-		_try_patch_toggle_hud_binding_ui()
+		if !_uses_mcm_config_surface():
+			_try_patch_toggle_hud_binding_ui()
 	if !_cfg.enabled:
 		_clear_binding(true)
+		return
+
+	## Fast path: already bound and HUD still in the tree — skip the expensive scene-tree scan every frame.
+	if _hud != null && is_instance_valid(_hud) && _hud.is_inside_tree() && is_instance_valid(_overlay):
+		_apply_overlay(_hud, delta)
 		return
 
 	var hud: Control = _resolve_hud()
 	if hud == null:
 		_clear_binding()
-		return
-
-	if _hud == hud && is_instance_valid(_overlay):
-		_apply_overlay(hud, delta)
 		return
 
 	_bind_hud(hud)
@@ -892,6 +1072,11 @@ func _process(delta: float) -> void:
 func _bind_hud(hud: Control) -> void:
 	_clear_binding()
 	_hud = hud
+	_hud_vitals_node = hud.get_node_or_null("Stats/Vitals") as Control
+	_hud_medical_node = hud.get_node_or_null("Stats/Medical") as Control
+	_hud_info_node = hud.get_node_or_null("Info") as Control
+	if _hud_info_node != null:
+		_hud_map_label = _hud_info_node.get_node_or_null("Map") as Label
 
 	## Parent into the vanilla HUD (`HUD.gd` subtree per game layout) instead of a root `CanvasLayer`.
 	## Same canvas as native vitals/crosshair — avoids an extra viewport layer compositing the full-screen overlay every frame.
@@ -923,6 +1108,10 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 	var medical_on: bool = _prefs_bool(prefs, &"medical", true)
 
 	_overlay.configure_hud_prefs(vitals_on, medical_on)
+	var force_show_all := false
+	if InputMap.has_action("show_all_vitals"):
+		force_show_all = Input.is_action_pressed("show_all_vitals")
+	_overlay.set_force_show_all(force_show_all)
 
 	_sync_vanilla_hud_overrides(hud, vitals_on, medical_on)
 	hud.modulate.a = 0.0 if _hud_force_hidden else 1.0
@@ -949,21 +1138,33 @@ func _apply_overlay(hud: Control, delta: float) -> void:
 
 ## Escape menu / Settings toggles (Preferences.tres). When true, we hide vanilla rows and draw replacements.
 func _sync_vanilla_hud_overrides(hud: Control, vitals_on: bool, medical_on: bool) -> void:
-	var vn := hud.get_node_or_null("Stats/Vitals") as Control
+	var vn := _hud_vitals_node
+	if vn == null || !is_instance_valid(vn):
+		vn = hud.get_node_or_null("Stats/Vitals") as Control
+		_hud_vitals_node = vn
 	if vn != null && vitals_on && vn.visible:
 		vn.visible = false
 
-	var mn := hud.get_node_or_null("Stats/Medical") as Control
+	var mn := _hud_medical_node
+	if mn == null || !is_instance_valid(mn):
+		mn = hud.get_node_or_null("Stats/Medical") as Control
+		_hud_medical_node = mn
 	if mn != null && medical_on && mn.visible:
 		mn.visible = false
 
 
 func _load_preferences(force_refresh: bool = false) -> Resource:
 	var frame := Engine.get_process_frames()
-	var expired := frame - _prefs_cache_frame >= _PREFS_CACHE_TTL_FRAMES
-	if force_refresh || _prefs_cache == null || !is_instance_valid(_prefs_cache) || expired:
-		_prefs_cache = load("user://Preferences.tres") as Resource
-		_prefs_cache_frame = frame
+	## Fast return: cache is warm and the mtime check interval hasn't elapsed.
+	if !force_refresh && _prefs_cache != null && is_instance_valid(_prefs_cache) && frame < _prefs_mtime_next_check_frame:
+		return _prefs_cache
+	_prefs_mtime_next_check_frame = frame + _PREFS_MTIME_CHECK_INTERVAL_FRAMES
+	## Cheap OS stat() — only deserialize the full .tres when the file actually changed.
+	var mtime: int = int(FileAccess.get_modified_time("user://Preferences.tres"))
+	if !force_refresh && _prefs_cache != null && is_instance_valid(_prefs_cache) && mtime == _prefs_cache_mtime:
+		return _prefs_cache
+	_prefs_cache = load("user://Preferences.tres") as Resource
+	_prefs_cache_mtime = mtime
 	return _prefs_cache
 
 
@@ -994,11 +1195,50 @@ func _preferred_toggle_hud_event() -> InputEvent:
 	return _toggle_hud_key_default_event()
 
 
+func _preferred_show_all_vitals_event() -> InputEvent:
+	var prefs := _load_preferences(false)
+	if prefs != null && is_instance_valid(prefs):
+		var action_events: Variant = prefs.get("actionEvents")
+		if action_events is Dictionary:
+			var d := action_events as Dictionary
+			if d.has("show_all_vitals") && d["show_all_vitals"] is InputEvent:
+				return d["show_all_vitals"] as InputEvent
+	var ev := InputEventKey.new()
+	ev.physical_keycode = KEY_MINUS
+	ev.keycode = KEY_MINUS
+	return ev
+
+
 func _ensure_toggle_hud_action() -> void:
-	if !InputMap.has_action("toggle_hud"):
-		InputMap.add_action("toggle_hud")
-	if InputMap.action_get_events("toggle_hud").is_empty():
-		InputMap.action_add_event("toggle_hud", _preferred_toggle_hud_event())
+	var action_name := "toggle_hud"
+	if _toggle_hud_action_ready && InputMap.has_action(action_name):
+		if !InputMap.action_get_events(action_name).is_empty():
+			return
+	_toggle_hud_action_ready = false
+	if !InputMap.has_action(action_name):
+		InputMap.add_action(action_name)
+	if !InputMap.has_action(action_name):
+		return
+	if InputMap.action_get_events(action_name).is_empty():
+		InputMap.action_add_event(action_name, _preferred_toggle_hud_event())
+	if !InputMap.action_get_events(action_name).is_empty():
+		_toggle_hud_action_ready = true
+
+
+func _ensure_show_all_vitals_action() -> void:
+	var action_name := "show_all_vitals"
+	if _show_all_vitals_action_ready && InputMap.has_action(action_name):
+		if !InputMap.action_get_events(action_name).is_empty():
+			return
+	_show_all_vitals_action_ready = false
+	if !InputMap.has_action(action_name):
+		InputMap.add_action(action_name)
+	if !InputMap.has_action(action_name):
+		return
+	if InputMap.action_get_events(action_name).is_empty():
+		InputMap.action_add_event(action_name, _preferred_show_all_vitals_event())
+	if !InputMap.action_get_events(action_name).is_empty():
+		_show_all_vitals_action_ready = true
 
 
 func _try_patch_toggle_hud_binding_ui() -> void:
@@ -1008,6 +1248,12 @@ func _try_patch_toggle_hud_binding_ui() -> void:
 	var root := tree.root
 	if root == null:
 		return
+	## Use the cached node when still valid — avoids a full scene-tree DFS every 90 frames.
+	if _binding_ui_node != null && is_instance_valid(_binding_ui_node):
+		_patch_binding_node(_binding_ui_node)
+		return
+	_binding_ui_node = null
+	_binding_ui_actions_injected = false
 	var stack: Array = [root]
 	while !stack.is_empty():
 		var n := stack.pop_back()
@@ -1018,32 +1264,94 @@ func _try_patch_toggle_hud_binding_ui() -> void:
 		var inputs_v: Variant = n.get("inputs")
 		if !(inputs_v is Dictionary):
 			continue
-		var inputs := (inputs_v as Dictionary).duplicate(true)
-		if !inputs.has("toggle_hud"):
-			inputs["toggle_hud"] = "Toggle HUD"
-			n.set("inputs", inputs)
-			n.call(&"CreateActions")
-		_ensure_toggle_hud_action()
-		var actions_v: Variant = n.get("actions")
-		if actions_v is Node:
-			var actions_node := actions_v as Node
-			for btn in actions_node.get_children():
-				var action_label := btn.find_child("LabelAction")
-				var input_label := btn.find_child("LabelInput")
-				if action_label is Label && input_label is Label:
-					if (action_label as Label).text == "Toggle HUD":
+		_binding_ui_node = n
+		_binding_ui_actions_injected = false
+		_patch_binding_node(n)
+		return
+
+
+func _patch_binding_node(n: Node) -> void:
+	var inputs_v: Variant = n.get("inputs")
+	if !(inputs_v is Dictionary):
+		return
+	var inputs := (inputs_v as Dictionary).duplicate(true)
+	var needs_recreate := false
+	if !inputs.has("toggle_hud"):
+		inputs["toggle_hud"] = "Toggle HUD"
+		needs_recreate = true
+	if !inputs.has("show_all_vitals"):
+		inputs["show_all_vitals"] = "Show All Vitals"
+		needs_recreate = true
+
+	var actions_v: Variant = n.get("actions")
+	var has_toggle_row := false
+	var has_show_all_row := false
+	if actions_v is Node:
+		var actions_node := actions_v as Node
+		for btn in actions_node.get_children():
+			var action_label := btn.find_child("LabelAction")
+			if action_label is Label:
+				match String((action_label as Label).text):
+					"Toggle HUD":
+						has_toggle_row = true
+					"Show All Vitals":
+						has_show_all_row = true
+
+	# Only rebuild when rows are missing; rebuilding every probe can clear in-progress/user keybinds.
+	if needs_recreate && (!_binding_ui_actions_injected || !has_toggle_row || !has_show_all_row):
+		n.set("inputs", inputs)
+		n.call(&"CreateActions")
+		_binding_ui_actions_injected = true
+	_ensure_toggle_hud_action()
+	_ensure_show_all_vitals_action()
+	actions_v = n.get("actions")
+	if actions_v is Node:
+		var actions_node := actions_v as Node
+		for btn in actions_node.get_children():
+			var action_label := btn.find_child("LabelAction")
+			var input_label := btn.find_child("LabelInput")
+			if action_label is Label && input_label is Label:
+				match (action_label as Label).text:
+					"Toggle HUD":
 						var evs := InputMap.action_get_events("toggle_hud")
+						(input_label as Label).text = evs[0].as_text().trim_suffix("- Physical") if !evs.is_empty() else ""
+					"Show All Vitals":
+						var evs := InputMap.action_get_events("show_all_vitals")
 						(input_label as Label).text = evs[0].as_text().trim_suffix("- Physical") if !evs.is_empty() else ""
 
 
 ## Targets HUD/Info (same nodes Settings → HUD.ShowMap / ShowFPS affect). Visibility is driven by vanilla + prefs.map / prefs.FPS.
 func _apply_fps_map(hud: Control, prefs: Resource) -> void:
-	var info := hud.get_node_or_null("Info") as Control
-	if info == null:
-		return
+	if _hud_info_node == null || !is_instance_valid(_hud_info_node):
+		_hud_info_node = hud.get_node_or_null("Info") as Control
+		if _hud_info_node == null:
+			return
+		_fps_map_cache_ok = false
+	var info := _hud_info_node
 	if info != _fps_map_cached_info:
 		_fps_map_cached_info = info
 		_fps_map_cache_ok = false
+
+	var show_fps := _prefs_bool(prefs, &"FPS", true)
+	var show_map := _prefs_bool(prefs, &"map", true)
+	var menu_open_now := _game_data_menu_open(_live_game_data)
+	var iface_ok_now := _resolve_interface_node() != null
+	if menu_open_now != _fps_map_prev_menu_open:
+		log_fpsmap_diag("menu state changed open=%s (prev=%s)" % [menu_open_now, _fps_map_prev_menu_open])
+		_fps_map_prev_menu_open = menu_open_now
+	if show_fps != _fps_map_prev_show_fps || show_map != _fps_map_prev_show_map:
+		log_fpsmap_diag("pref visibility changed fps=%s map=%s (prev fps=%s map=%s)" % [show_fps, show_map, _fps_map_prev_show_fps, _fps_map_prev_show_map])
+		_fps_map_prev_show_fps = show_fps
+		_fps_map_prev_show_map = show_map
+	if iface_ok_now != _fps_map_prev_iface_ok:
+		log_fpsmap_diag("interface availability changed iface_ok=%s (prev=%s)" % [iface_ok_now, _fps_map_prev_iface_ok])
+		_fps_map_prev_iface_ok = iface_ok_now
+	var fps_prefix := info.get_node_or_null(NodePath("FPS")) as CanvasItem
+	if fps_prefix != null:
+		fps_prefix.visible = show_fps
+	var map_node := info.get_node_or_null(NodePath("Map")) as CanvasItem
+	if map_node != null:
+		map_node.visible = show_map
 
 	_ensure_fps_label_style(info)
 	_apply_map_label_style(info)
@@ -1058,15 +1366,373 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 		&& is_equal_approx(oy, _fps_map_c_oy)
 		&& is_equal_approx(a, _fps_map_c_alpha)
 	):
+		var layout_changed := _update_fps_map_extra_lines(info, hud)
+		if layout_changed:
+			info.position = _fps_map_cluster_position(info, hud, ox, oy)
+		_position_fps_map_extras(info)
+		if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label):
+			_fps_map_extra_label.modulate = Color(1.0, 1.0, 1.0, a)
+		if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+			_fps_map_extra_weight_icon.modulate = Color(1.0, 1.0, 1.0, a)
+		log_fpsmap_diag(
+			"cached apply pos=%s scale=%.3f alpha=%.3f map=%s fps=%s extra_vis=%s extra_text=\"%s\""
+			% [info.position, sc, a, show_map, show_fps, _fps_map_extra_label != null && _fps_map_extra_label.visible, _fps_extra_last_text]
+		)
+		_fpsmap_dump_cluster_snapshot("cached", info, hud, show_fps, show_map, ox, oy, sc, a)
 		return
 	info.scale = Vector2(sc, sc)
-	info.position = Vector2(ox, oy)
+	var changed_now := _update_fps_map_extra_lines(info, hud)
+	info.position = _fps_map_cluster_position(info, hud, ox, oy)
+	if changed_now:
+		info.position = _fps_map_cluster_position(info, hud, ox, oy)
+	_position_fps_map_extras(info)
 	info.modulate = Color(1.0, 1.0, 1.0, a)
+	if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label):
+		_fps_map_extra_label.modulate = Color(1.0, 1.0, 1.0, a)
+	if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+		_fps_map_extra_weight_icon.modulate = Color(1.0, 1.0, 1.0, a)
+	log_fpsmap_diag(
+		"full apply pos=%s scale=%.3f alpha=%.3f map=%s fps=%s changed=%s extra_vis=%s extra_text=\"%s\""
+		% [info.position, sc, a, show_map, show_fps, changed_now, _fps_map_extra_label != null && _fps_map_extra_label.visible, _fps_extra_last_text]
+	)
+	_fpsmap_dump_cluster_snapshot("full", info, hud, show_fps, show_map, ox, oy, sc, a)
 	_fps_map_cache_ok = true
 	_fps_map_c_scale = sc
 	_fps_map_c_ox = ox
 	_fps_map_c_oy = oy
 	_fps_map_c_alpha = a
+
+
+func _fps_map_cluster_position(info: Control, hud: Control, ox: float, oy: float) -> Vector2:
+	var vp := get_viewport()
+	var vp_size := vp.get_visible_rect().size if vp != null else Vector2(1920, 1080)
+	var sz := _fps_map_cluster_visual_size(info)
+	var edge := _normalize_cluster_edge(str(_cfg.fps_map_cluster_justify))
+	var align := _normalize_cluster_alignment(str(_cfg.fps_map_cluster_alignment))
+	var p := Vector2.ZERO
+	match edge:
+		"bottom":
+			p.y = vp_size.y - sz.y - oy
+			match align:
+				"center":
+					p.x = (vp_size.x - sz.x) * 0.5
+				"trailing":
+					p.x = vp_size.x - sz.x - ox
+				_:
+					p.x = ox
+		"left":
+			p.x = ox
+			match align:
+				"center":
+					p.y = (vp_size.y - sz.y) * 0.5
+				"trailing":
+					p.y = vp_size.y - sz.y - oy
+				_:
+					p.y = oy
+		"right":
+			p.x = vp_size.x - sz.x - ox
+			match align:
+				"center":
+					p.y = (vp_size.y - sz.y) * 0.5
+				"trailing":
+					p.y = vp_size.y - sz.y - oy
+				_:
+					p.y = oy
+		_:
+			p.y = oy
+			match align:
+				"center":
+					p.x = (vp_size.x - sz.x) * 0.5
+				"trailing":
+					p.x = vp_size.x - sz.x - ox
+				_:
+					p.x = ox
+	var out := Vector2(clampf(p.x, 0.0, maxf(0.0, vp_size.x - sz.x)), clampf(p.y, 0.0, maxf(0.0, vp_size.y - sz.y)))
+	log_fpsmap_diag("cluster position edge=%s align=%s vp=%s sz=%s in=(%.1f,%.1f) out=%s" % [edge, align, vp_size, sz, ox, oy, out])
+	return out
+
+
+func _fps_map_cluster_visual_size(info: Control) -> Vector2:
+	var core_sz := _fps_map_info_only_size(info)
+	if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label) && _fps_map_extra_label.visible:
+		## extra label is an unscaled sibling of info; its font_size is already pre-multiplied by
+		## info.scale in _sync_fps_map_extra_style, so _measure returns true screen pixels directly.
+		var extra_sz := _measure_multiline_label_size(_fps_map_extra_label)
+		var indent := ((_FPS_MAP_ICON_SIDE_PX + _FPS_MAP_ICON_GAP_PX) * info.scale.x) if _fps_map_extra_show_weight_icon else 0.0
+		var out := Vector2(maxf(core_sz.x, extra_sz.x + indent), core_sz.y + _FPS_MAP_EXTRA_SEP_PX + extra_sz.y)
+		log_fpsmap_diag("cluster size core=%s extra=%s indent=%.1f sep=%.1f out=%s" % [core_sz, extra_sz, indent, _FPS_MAP_EXTRA_SEP_PX, out])
+		return out
+	log_fpsmap_diag("cluster size core-only=%s" % [core_sz])
+	return core_sz
+
+
+func _fps_map_info_only_size(info: Control) -> Vector2:
+	var base := info.get_combined_minimum_size()
+	if base.x <= 1.0 || base.y <= 1.0:
+		base = info.size
+	# Children can report late/partial mins while FPS/Map values mutate;
+	# include current control size so trailing-edge placement never underestimates.
+	base = Vector2(maxf(base.x, info.size.x), maxf(base.y, info.size.y))
+	return base * info.scale
+
+
+func _update_fps_map_extra_lines(info: Control, hud: Control) -> bool:
+	var want_extra := bool(_cfg.fps_map_show_encumbrance_pct) || bool(_cfg.fps_map_show_inventory_value)
+	if !want_extra:
+		var was_visible := false
+		if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label):
+			was_visible = _fps_map_extra_label.visible
+			_fps_map_extra_label.visible = false
+		if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+			_fps_map_extra_weight_icon.visible = false
+		_fps_extra_last_text = ""
+		log_fpsmap_diag("extras disabled")
+		return was_visible
+	if _fps_map_extra_label == null || !is_instance_valid(_fps_map_extra_label):
+		var lb := Label.new()
+		lb.name = "SimpleHUDFPSMapExtra"
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		hud.add_child(lb)
+		_fps_map_extra_label = lb
+	elif _fps_map_extra_label.get_parent() != hud:
+		var p := _fps_map_extra_label.get_parent()
+		if p != null:
+			p.remove_child(_fps_map_extra_label)
+		hud.add_child(_fps_map_extra_label)
+	if _fps_map_extra_weight_icon == null || !is_instance_valid(_fps_map_extra_weight_icon):
+		var tr := TextureRect.new()
+		tr.name = "SimpleHUDFPSMapWeightIcon"
+		tr.texture = _resolve_weight_icon_texture()
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		hud.add_child(tr)
+		_fps_map_extra_weight_icon = tr
+	elif _fps_map_extra_weight_icon.get_parent() != hud:
+		var p := _fps_map_extra_weight_icon.get_parent()
+		if p != null:
+			p.remove_child(_fps_map_extra_weight_icon)
+		hud.add_child(_fps_map_extra_weight_icon)
+	_sync_fps_map_extra_style(info)
+	var frame := Engine.get_process_frames()
+	_fps_extra_next_update_frame = frame + _FPS_EXTRA_UPDATE_INTERVAL_FRAMES
+	if _game_data_menu_open(_live_game_data):
+		if _fps_extra_last_text != "":
+			_fps_map_extra_label.visible = true
+			log_fpsmap_diag("extras paused/menu-open retain text=\"%s\"" % [_fps_extra_last_text])
+		return false
+	var lines: Array[String] = []
+	var show_weight_icon := false
+	var iface := _resolve_interface_node()
+	if iface == null:
+		log_fpsmap_diag("extras iface unresolved; retain last text=\"%s\"" % [_fps_extra_last_text])
+		return false
+	if bool(_cfg.fps_map_show_encumbrance_pct):
+		var w := float(iface.get("currentInventoryWeight"))
+		var cap := float(iface.get("currentInventoryCapacity"))
+		var pct := (w / cap) * 100.0 if cap > 0.001 else 0.0
+		lines.append("%.0f%%" % [clampf(pct, 0.0, 999.0)])
+		show_weight_icon = true
+		log_fpsmap_diag("extras enc raw weight=%.3f cap=%.3f pct=%.3f clamped=%.3f" % [w, cap, pct, clampf(pct, 0.0, 999.0)])
+	if bool(_cfg.fps_map_show_inventory_value):
+		var val := float(iface.get("currentInventoryValue"))
+		var val_rounded := int(round(val))
+		var val_fmt := _format_int_with_commas(val_rounded)
+		lines.append("%s€" % [val_fmt])
+		log_fpsmap_diag("extras value raw=%.3f rounded=%d formatted=%s€" % [val, val_rounded, val_fmt])
+	_fps_map_extra_show_weight_icon = show_weight_icon
+	if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+		_fps_map_extra_weight_icon.visible = show_weight_icon && !lines.is_empty()
+	if lines.is_empty():
+		var was_visible_now := _fps_map_extra_label.visible
+		_fps_map_extra_label.visible = false
+		_fps_extra_last_text = ""
+		log_fpsmap_diag("extras no lines produced")
+		return was_visible_now
+	var new_text := "\n".join(lines)
+	var changed := new_text != _fps_extra_last_text || !_fps_map_extra_label.visible
+	if new_text != _fps_extra_last_text:
+		_fps_extra_last_text = new_text
+		_fps_map_extra_label.text = new_text
+	_fps_map_extra_label.visible = true
+	log_fpsmap_diag("extras updated changed=%s icon=%s text=\"%s\"" % [changed, show_weight_icon, new_text])
+	return changed
+
+
+func _position_fps_map_extras(info: Control) -> void:
+	if _fps_map_extra_label == null || !is_instance_valid(_fps_map_extra_label):
+		return
+	if !_fps_map_extra_label.visible:
+		if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+			_fps_map_extra_weight_icon.visible = false
+		return
+	var sc := info.scale
+	var core_sz := _fps_map_info_only_size(info)
+	var base := info.position + Vector2(0.0, core_sz.y + _FPS_MAP_EXTRA_SEP_PX)
+	var icon_span := ((_FPS_MAP_ICON_SIDE_PX + _FPS_MAP_ICON_GAP_PX) * sc.x) if _fps_map_extra_show_weight_icon else 0.0
+	var label_sz := _measure_multiline_label_size(_fps_map_extra_label)
+	var right_x := info.position.x + core_sz.x
+	_fps_map_extra_label.position = Vector2(right_x - label_sz.x, base.y)
+	var vp := get_viewport()
+	if vp != null:
+		var vp_size := vp.get_visible_rect().size
+		## label_sz is already in screen pixels (font was pre-scaled); do NOT multiply by sc again.
+		_fps_map_extra_label.position = Vector2(
+			clampf(_fps_map_extra_label.position.x, icon_span, maxf(icon_span, vp_size.x - label_sz.x)),
+			clampf(_fps_map_extra_label.position.y, 0.0, maxf(0.0, vp_size.y - label_sz.y))
+		)
+		log_fpsmap_diag("extras clamp vp=%s label_sz=%s clamped_pos=%s" % [vp_size, label_sz, _fps_map_extra_label.position])
+	_refresh_fps_map_weight_icon_transform(_fps_map_extra_label.position, sc)
+	log_fpsmap_diag("extras positioned base=%s right_x=%.2f icon_span=%.2f label_pos=%s icon=%s" % [base, right_x, icon_span, _fps_map_extra_label.position, _fps_map_extra_show_weight_icon])
+
+
+func _refresh_fps_map_weight_icon_transform(label_pos: Vector2, scale_vec: Vector2) -> void:
+	if _fps_map_extra_weight_icon == null || !is_instance_valid(_fps_map_extra_weight_icon):
+		return
+	if _fps_map_extra_label == null || !is_instance_valid(_fps_map_extra_label):
+		_fps_map_extra_weight_icon.visible = false
+		return
+	var sc := scale_vec.x
+	var side := _FPS_MAP_ICON_SIDE_PX * sc
+	_fps_map_extra_weight_icon.custom_minimum_size = Vector2(side, side)
+	_fps_map_extra_weight_icon.size = Vector2(side, side)
+	_fps_map_extra_weight_icon.modulate = Color(1.0, 1.0, 1.0, clampf(float(_cfg.fps_map_alpha), 0.0, 1.0))
+	## Vertically center the icon with the first text line using actual font metrics.
+	var line_h := side
+	var fnt := _fps_map_extra_label.get_theme_font("font")
+	var fsz := _fps_map_extra_label.get_theme_font_size("font_size")
+	if fsz <= 0:
+		fsz = maxi(8, int(16 * sc))
+	if fnt != null:
+		line_h = fnt.get_height(fsz)
+	var icon_offset_y := maxf(0.0, (line_h - side) * 0.5)
+	var icon_gap := _FPS_MAP_ICON_GAP_PX * sc
+	_fps_map_extra_weight_icon.position = Vector2(label_pos.x - side - icon_gap, label_pos.y + icon_offset_y)
+	var vp := get_viewport()
+	if vp != null:
+		var vp_size := vp.get_visible_rect().size
+		_fps_map_extra_weight_icon.position = Vector2(
+			clampf(_fps_map_extra_weight_icon.position.x, 0.0, maxf(0.0, vp_size.x - side)),
+			clampf(_fps_map_extra_weight_icon.position.y, 0.0, maxf(0.0, vp_size.y - side))
+		)
+	log_fpsmap_diag("icon transform side=%.2f gap=%.2f line_h=%.2f offset_y=%.2f label_pos=%s pos=%s tex=%s mod=%s" % [side, icon_gap, line_h, icon_offset_y, label_pos, _fps_map_extra_weight_icon.position, _fps_map_extra_weight_icon.texture, _fps_map_extra_weight_icon.modulate])
+
+
+func _measure_multiline_label_size(lb: Label) -> Vector2:
+	if lb == null:
+		return Vector2.ZERO
+	var fnt := lb.get_theme_font("font")
+	var sz := lb.get_theme_font_size("font_size")
+	if sz <= 0:
+		sz = 16
+	if fnt == null:
+		return lb.get_combined_minimum_size()
+	var text := lb.text
+	if text == "":
+		return Vector2.ZERO
+	var parts := text.split("\n", false)
+	var width := 0.0
+	for p in parts:
+		var sample := p if p != "" else " "
+		width = maxf(width, fnt.get_string_size(sample, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x)
+	var height := fnt.get_height(sz) * float(parts.size())
+	return Vector2(width, height)
+
+
+func _resolve_weight_icon_texture() -> Texture2D:
+	if _fps_map_weight_icon_resolved:
+		return _fps_map_weight_icon_texture
+	_fps_map_weight_icon_resolved = true
+	for p in _HUD_WEIGHT_ICON_PATHS:
+		if !ResourceLoader.exists(p):
+			continue
+		var tex := load(p) as Texture2D
+		if tex != null:
+			_fps_map_weight_icon_texture = tex
+			log_fpsmap_diag("weight icon resolved path=%s" % [p])
+			return _fps_map_weight_icon_texture
+	log_fpsmap_diag("weight icon unresolved; no valid path")
+	return null
+
+
+func _sync_fps_map_extra_style(info: Control) -> void:
+	if _fps_map_extra_label == null || !is_instance_valid(_fps_map_extra_label):
+		return
+	## Prefer FPS/Frames (the numeric value label) as the style reference — it's the primary element.
+	## Fall back to Map label if FPS/Frames isn't found.
+	var fps_value := info.get_node_or_null("FPS/Frames") as Label
+	var map_label := info.get_node_or_null("Map") as Label
+	var style_ref: Label = fps_value if fps_value != null else map_label
+	if style_ref != null:
+		var chosen_font: Font = style_ref.get_theme_font("font")
+		if chosen_font == null:
+			chosen_font = _HUD_TEXT_FONT
+		if chosen_font != null:
+			_fps_map_extra_label.add_theme_font_override("font", chosen_font)
+		## info is scaled by fps_map_scale; this label is an unscaled sibling, so pre-scale the
+		## font size so it renders at the same visual size as the text inside info.
+		var ref_font_size := style_ref.get_theme_font_size("font_size")
+		if ref_font_size <= 0:
+			ref_font_size = 16
+		var scaled_size := maxi(8, int(ref_font_size * info.scale.x))
+		_fps_map_extra_label.add_theme_font_size_override("font_size", scaled_size)
+		## Force white — same explicit override applied to Info/FPS/Frames in _ensure_fps_label_style.
+		_fps_map_extra_label.add_theme_color_override("font_color", Color.WHITE)
+		_fps_map_extra_label.add_theme_color_override("font_shadow_color", style_ref.get_theme_color("font_shadow_color"))
+		log_fpsmap_diag("style synced from %s ref_size=%d scaled=%d info_scale=%.3f ref_style={%s} extra_style={%s}" % [style_ref.name, ref_font_size, scaled_size, info.scale.x, _fpsmap_label_style_diag(style_ref), _fpsmap_label_style_diag(_fps_map_extra_label)])
+	else:
+		var fb_size := maxi(8, int(16 * info.scale.x))
+		_fps_map_extra_label.add_theme_font_override("font", _HUD_TEXT_FONT)
+		_fps_map_extra_label.add_theme_font_size_override("font_size", fb_size)
+		_fps_map_extra_label.add_theme_color_override("font_color", Color.WHITE)
+		_fps_map_extra_label.add_theme_color_override("font_shadow_color", Color.BLACK)
+		log_fpsmap_diag("style fallback size=%d info_scale=%.3f extra_style={%s}" % [fb_size, info.scale.x, _fpsmap_label_style_diag(_fps_map_extra_label)])
+
+func _format_int_with_commas(n: int) -> String:
+	var s := str(abs(n))
+	var out := ""
+	var i := s.length()
+	while i > 3:
+		out = "," + s.substr(i - 3, 3) + out
+		i -= 3
+	out = s.substr(0, i) + out
+	return ("-" if n < 0 else "") + out
+
+
+func _resolve_interface_node() -> Node:
+	if _ui_interface_node != null && is_instance_valid(_ui_interface_node):
+		return _ui_interface_node
+	var frame := Engine.get_process_frames()
+	if frame < _ui_next_probe_frame:
+		return null
+	_ui_next_probe_frame = frame + _UI_PROBE_INTERVAL_FRAMES
+	log_fpsmap_diag("iface probe frame=%d next=%d" % [frame, _ui_next_probe_frame])
+	var tree := get_tree()
+	if tree == null || tree.root == null:
+		log_fpsmap_diag("iface probe aborted: tree/root unavailable")
+		return null
+	var stack: Array = [tree.root]
+	while !stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n != null && str(n.name) == "Interface" && n.get("equipmentUI") != null:
+			_ui_interface_node = n
+			log_fpsmap_diag("iface resolved path=%s" % [str(_ui_interface_node.get_path())])
+			return _ui_interface_node
+		for c in n.get_children():
+			stack.append(c)
+	log_fpsmap_diag("iface probe miss")
+	return null
+
+
+func _uses_mcm_config_surface() -> bool:
+	return bool(Engine.get_meta(&"SimpleHUD_UsesMCM", false))
+
+
+func _fps_map_use_right_text_edge() -> bool:
+	var edge := _normalize_cluster_edge(str(_cfg.fps_map_cluster_justify))
+	var align := _normalize_cluster_alignment(str(_cfg.fps_map_cluster_alignment))
+	if edge == "right":
+		return true
+	return (edge == "top" || edge == "bottom") && align == "trailing"
 
 func _ensure_fps_label_style(info: Control) -> void:
 	if info == null:
@@ -1083,34 +1749,66 @@ func _ensure_fps_label_style(info: Control) -> void:
 	var fps_prefix_label: Label = null
 	if fps_prefix != null && (fps_prefix is Label):
 		fps_prefix_label = fps_prefix as Label
+	var right_edge_text := _fps_map_use_right_text_edge()
 	if fps_prefix_label != null:
 		if hide_prefix:
 			fps_prefix_label.text = ""
 		else:
 			fps_prefix_label.text = "FPS:"
-		fps_prefix_label.visible = true
+		## Respect vanilla ShowFPS preference (set in _apply_fps_map).
 		fps_prefix_label.add_theme_color_override("font_color", Color.WHITE)
+		fps_prefix_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if right_edge_text else HORIZONTAL_ALIGNMENT_LEFT
+		if right_edge_text:
+			fps_prefix_label.offset_left = 0.0
+			fps_prefix_label.offset_right = maxf(fps_prefix_label.offset_right, info.size.x)
 
 	var fps_value := info.get_node_or_null(NodePath("FPS/Frames")) as Label
 	if fps_value != null:
 		fps_value.add_theme_color_override("font_color", Color.WHITE)
-		fps_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		if hide_prefix:
-			# Collapse vanilla +36 gap when "FPS:" prefix is hidden.
-			fps_value.offset_left = 0.0
-			fps_value.offset_right = 40.0
+		if right_edge_text:
+			fps_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			var parent_w := fps_prefix_label.size.x if fps_prefix_label != null else info.size.x
+			if parent_w <= 1.0:
+				parent_w = maxf(80.0, info.size.x)
+			var fnt := fps_value.get_theme_font("font")
+			var fsz := fps_value.get_theme_font_size("font_size")
+			if fsz <= 0:
+				fsz = 16
+			var fps_text := fps_value.text if fps_value.text != "" else "000.0"
+			var txt_w := 40.0
+			if fnt != null:
+				txt_w = maxf(txt_w, fnt.get_string_size(fps_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x + 2.0)
+			fps_value.offset_right = parent_w
+			fps_value.offset_left = parent_w - txt_w
 		else:
-			# Restore vanilla spacing with visible "FPS:" prefix.
-			fps_value.offset_left = 36.0
-			fps_value.offset_right = 76.0
+			fps_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			if hide_prefix:
+				# Collapse vanilla +36 gap when "FPS:" prefix is hidden.
+				fps_value.offset_left = 0.0
+				fps_value.offset_right = 40.0
+			else:
+				# Restore vanilla spacing with visible "FPS:" prefix.
+				fps_value.offset_left = 36.0
+				fps_value.offset_right = 76.0
+		var min_h := maxf(22.0, fps_value.offset_bottom)
+		if fps_prefix_label != null:
+			fps_prefix_label.custom_minimum_size = Vector2(fps_prefix_label.custom_minimum_size.x, min_h)
 
 
 func _apply_map_label_style(info: Control) -> void:
 	if info == null:
 		return
-	var map_label := info.get_node_or_null("Map") as Label
+	if _hud_map_label == null || !is_instance_valid(_hud_map_label):
+		_hud_map_label = info.get_node_or_null("Map") as Label
+	var map_label := _hud_map_label
 	if map_label == null:
 		return
+	if _fps_map_use_right_text_edge():
+		map_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		map_label.offset_left = 0.0
+		map_label.offset_right = maxf(map_label.offset_right, info.size.x)
+	else:
+		map_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	var mode := str(_cfg.map_label_mode).strip_edges().to_lower()
 	if mode != "default" && mode != "map_only" && mode != "region_only":
 		mode = "default"
@@ -1148,8 +1846,18 @@ func _clear_binding(restore_vanilla: bool = false) -> void:
 		_overlay.queue_free()
 	_overlay = null
 	_fps_info_node = null
+	if _fps_map_extra_weight_icon != null && is_instance_valid(_fps_map_extra_weight_icon):
+		_fps_map_extra_weight_icon.queue_free()
+	_fps_map_extra_weight_icon = null
+	if _fps_map_extra_label != null && is_instance_valid(_fps_map_extra_label):
+		_fps_map_extra_label.queue_free()
+	_fps_map_extra_label = null
 	_fps_map_cache_ok = false
 	_fps_map_cached_info = null
+	_hud_vitals_node = null
+	_hud_medical_node = null
+	_hud_info_node = null
+	_hud_map_label = null
 	if restore_vanilla && is_instance_valid(bound_hud):
 		_restore_vanilla_hud_visibility(bound_hud)
 	_hud = null
@@ -1274,17 +1982,8 @@ func _extract_game_data_from_object(o: Object) -> Resource:
 
 
 func _resource_is_game_data(res: Resource) -> bool:
-	var has_h := false
-	var has_hy := false
-	for p in res.get_property_list():
-		match String(p.name):
-			"health":
-				has_h = true
-			"hydration":
-				has_hy = true
-			_:
-				pass
-	return has_h && has_hy
+	## Direct property probe — O(1) vs iterating the full property list.
+	return res.get(&"health") != null && res.get(&"hydration") != null
 
 
 func _resolve_hud() -> Control:

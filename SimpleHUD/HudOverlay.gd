@@ -82,17 +82,54 @@ var _GAME_DATA_SPREAD_KEYS: PackedStringArray = PackedStringArray([
 	"currentSpread",
 ])
 
+## Pre-allocated to avoid a new Dictionary + four Array allocations on every layout pass.
+var _lv_group_bottom: Array = []
+var _lv_group_top: Array = []
+var _lv_group_left: Array = []
+var _lv_group_right: Array = []
+
+## Debounce for fill-empty-space layout changes: stats crossing thresholds during sprinting/combat
+## would otherwise trigger a full layout pass every frame. 200 ms (1/5 s) max delay.
+var _fill_layout_debounce_usec: int = -1
+const _FILL_LAYOUT_DEBOUNCE_USEC: int = 200000
+
+## When true (Show All Vitals key held), all stats render at full alpha regardless of threshold/transparency mode.
+## Status tray is intentionally NOT affected — binary ailment icons are meaningless when inactive.
+var _force_show_all: bool = false
+
+
+static var _cached_widget_defs: Array = []
+var _cached_stat_ids: Array[StringName] = []
+var _interface_node: Node = null
+var _next_interface_probe_frame: int = 0
+const _INTERFACE_PROBE_INTERVAL_FRAMES := 30
+var _helmet_percent_cached: float = 0.0
+var _plate_percent_cached: float = 0.0
+var _helmet_available_cached: bool = false
+var _plate_available_cached: bool = false
 
 func _widget_defs() -> Array:
-	return [
-		[SimpleHUDConfigScript.STAT_HEALTH, "HP"],
-		[SimpleHUDConfigScript.STAT_ENERGY, "EN"],
-		[SimpleHUDConfigScript.STAT_HYDRATION, "HY"],
-		[SimpleHUDConfigScript.STAT_MENTAL, "MN"],
-		[SimpleHUDConfigScript.STAT_BODY_TEMP, "TP"],
-		[SimpleHUDConfigScript.STAT_STAMINA, "ST"],
-		[SimpleHUDConfigScript.STAT_FATIGUE, "FT"],
-	]
+	if _cached_widget_defs.is_empty():
+		_cached_widget_defs = [
+			[SimpleHUDConfigScript.STAT_HEALTH, "HP"],
+			[SimpleHUDConfigScript.STAT_ENERGY, "EN"],
+			[SimpleHUDConfigScript.STAT_HYDRATION, "HY"],
+			[SimpleHUDConfigScript.STAT_MENTAL, "MN"],
+			[SimpleHUDConfigScript.STAT_BODY_TEMP, "TP"],
+			[SimpleHUDConfigScript.STAT_STAMINA, "ST"],
+			[SimpleHUDConfigScript.STAT_FATIGUE, "FT"],
+			[&"helmet", "HM"],
+			[&"cat", "CT"],
+			[&"plate", "PL"],
+		]
+	return _cached_widget_defs
+
+
+func _stat_ids() -> Array[StringName]:
+	if _cached_stat_ids.is_empty():
+		for d in _widget_defs():
+			_cached_stat_ids.append(d[0] as StringName)
+	return _cached_stat_ids
 
 
 func setup(game_data: Resource, cfg: RefCounted) -> void:
@@ -116,7 +153,7 @@ func setup(game_data: Resource, cfg: RefCounted) -> void:
 		_widgets[sid] = sw
 		_stats_root.add_child(sw)
 
-	var n_stats: int = SimpleHUDConfigScript.STAT_IDS.size()
+	var n_stats: int = _stat_ids().size()
 	_vit_scratch_p.resize(n_stats)
 	_vit_scratch_alpha.resize(n_stats)
 	_vit_show.resize(n_stats)
@@ -176,6 +213,16 @@ func mark_layout_dirty() -> void:
 	_tray_cached_vp = Vector2(-1.0, -1.0)
 	_last_vitals_tick_hash = -1
 	_last_vitals_layout_hash = -1
+	_fill_layout_debounce_usec = -1
+
+
+func set_force_show_all(v: bool) -> void:
+	if v == _force_show_all:
+		return
+	_force_show_all = v
+	_last_vitals_tick_hash = -1
+	## Also force an immediate layout pass so fill-empty-space repositions correctly without debounce.
+	mark_layout_dirty()
 
 
 func notify_config_changed() -> void:
@@ -284,14 +331,15 @@ func layout_for_viewport(vp_size: Vector2, stats_visible: bool) -> void:
 
 
 func _layout_vitals(vp: Vector2) -> void:
-	var groups: Dictionary = {
-		"bottom": [],
-		"top": [],
-		"left": [],
-		"right": [],
-	}
+	_lv_group_bottom.clear()
+	_lv_group_top.clear()
+	_lv_group_left.clear()
+	_lv_group_right.clear()
 
-	for sid in SimpleHUDConfigScript.STAT_IDS:
+	for sid in _stat_ids():
+		## Optional vitals (helmet/cat/plate) are removed from layout flow entirely when not applicable.
+		if !_is_stat_enabled(sid):
+			continue
 		var w: Control = _widgets.get(sid) as Control
 		if w == null:
 			continue
@@ -299,25 +347,24 @@ func _layout_vitals(vp: Vector2) -> void:
 		if bool(_cfg.vitals_fill_empty_space) && !_vital_should_participate_in_layout(sid, w):
 			continue
 		var ax := str(_cfg.get_vitals_anchor(sid)).to_lower()
-		if !groups.has(ax):
-			ax = "bottom"
-		(groups[ax] as Array).append(sid)
-
-	var order := ["bottom", "top", "left", "right"]
-	for ax in order:
-		var ids: Array = groups[ax]
-		if ids.is_empty():
-			continue
-		var pad_edge := _group_edge_padding(ids, ax)
 		match ax:
-			"bottom":
-				_place_row_bottom(vp, ids, pad_edge)
 			"top":
-				_place_row_top(vp, ids, pad_edge)
+				_lv_group_top.append(sid)
 			"left":
-				_place_col_left(vp, ids, pad_edge)
+				_lv_group_left.append(sid)
 			"right":
-				_place_col_right(vp, ids, pad_edge)
+				_lv_group_right.append(sid)
+			_:
+				_lv_group_bottom.append(sid)
+
+	if !_lv_group_bottom.is_empty():
+		_place_row_bottom(vp, _lv_group_bottom, _group_edge_padding(_lv_group_bottom, "bottom"))
+	if !_lv_group_top.is_empty():
+		_place_row_top(vp, _lv_group_top, _group_edge_padding(_lv_group_top, "top"))
+	if !_lv_group_left.is_empty():
+		_place_col_left(vp, _lv_group_left, _group_edge_padding(_lv_group_left, "left"))
+	if !_lv_group_right.is_empty():
+		_place_col_right(vp, _lv_group_right, _group_edge_padding(_lv_group_right, "right"))
 
 
 func _widget_counts_for_layout(w: Control) -> bool:
@@ -336,8 +383,12 @@ func _vital_counts_for_layout(sid: StringName, w: Control) -> bool:
 
 
 func _vital_should_participate_in_layout(sid: StringName, w: Control) -> bool:
+	if !_is_stat_enabled(sid):
+		return false
 	## For fill-empty-space layout decisions, derive active state directly from live data + cfg
 	## so placement remains correct even when render updates are hash-skipped.
+	if _force_show_all:
+		return true
 	if _cfg == null || _game_data == null || !is_instance_valid(_game_data):
 		return _vital_counts_for_layout(sid, w)
 	var raw: float = _percent_for(sid)
@@ -842,6 +893,8 @@ func _crosshair_hidden_for_stowed() -> bool:
 func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_visible: bool = true, viewport_px: Vector2 = Vector2.ZERO) -> void:
 	if !_cfg.enabled || !is_instance_valid(_game_data):
 		return
+	if bool(_cfg.misc_vital_helmet_enabled) || bool(_cfg.misc_vital_plate_enabled):
+		_refresh_equipment_status_cache()
 	if hud_layer_visible && _tray != null:
 		## When status tray is hidden by config and already invisible, skip `refresh()` work entirely.
 		if str(_cfg.status_mode) != "hidden" || _tray.visible:
@@ -866,21 +919,26 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 	h = (h ^ hash(trans_mode)) * 16777619
 	h = (h ^ static_op_q) * 16777619
 	h = (h ^ floor_q) * 16777619
+	h = (h ^ (1 if _force_show_all else 0)) * 16777619
 
 	var idx: int = 0
-	for sid in SimpleHUDConfigScript.STAT_IDS:
+	for sid in _stat_ids():
 		var raw: float = _percent_for(sid)
 		var p: float = _normalized_percent(sid, raw)
 		var th: float = float(_cfg.get_threshold(sid))
 		var show_stat: bool
-		if th <= 0.0:
+		if !_is_stat_enabled(sid):
+			show_stat = false
+		elif _force_show_all || th <= 0.0:
 			show_stat = true
 		else:
 			show_stat = p <= th
 		var use_radial: bool = bool(_cfg.get_radial(sid))
 		var computed: float = 1.0 - clampf(p, 0.0, 100.0) / 100.0
 		var alpha: float = computed
-		if show_stat:
+		if _force_show_all:
+			alpha = 1.0
+		elif show_stat:
 			match trans_mode:
 				"opaque":
 					alpha = 1.0
@@ -914,15 +972,29 @@ func tick(delta_sec: float = -1.0, skip_prefs_guard: bool = false, hud_layer_vis
 			active_layout = 1 if (_vit_show[j] != 0 && _vit_scratch_alpha[j] > 0.001) else 0
 		lh = (lh ^ active_layout) * 16777619
 	if lh != _last_vitals_layout_hash:
-		_last_vitals_layout_hash = lh
-		_layout_revision += 1
+		## When fill-empty is on, stat values cross thresholds continuously during combat/sprinting,
+		## triggering a layout pass every frame. Gate these on a 200 ms debounce so layout only fires
+		## after the values have been stable for 1/5 s. Non-fill-empty changes (config edits) apply immediately.
+		var apply_now := true
+		if fill_empty_layout:
+			if _fill_layout_debounce_usec < 0:
+				_fill_layout_debounce_usec = Time.get_ticks_usec()
+				apply_now = false
+			elif Time.get_ticks_usec() - _fill_layout_debounce_usec < _FILL_LAYOUT_DEBOUNCE_USEC:
+				apply_now = false
+		if apply_now:
+			_last_vitals_layout_hash = lh
+			_layout_revision += 1
+			_fill_layout_debounce_usec = -1
+	else:
+		_fill_layout_debounce_usec = -1
 
 	if !skip_prefs_guard && h == _last_vitals_tick_hash:
 		return
 	_last_vitals_tick_hash = h
 
 	for j in range(idx):
-		var sid2: StringName = SimpleHUDConfigScript.STAT_IDS[j]
+		var sid2: StringName = _stat_ids()[j]
 		var w := _widgets.get(sid2) as STAT_WIDGET_SCRIPT
 		if w != null:
 			w.update_display(
@@ -1040,7 +1112,9 @@ func _bearing_from_game_data() -> float:
 func _uses_radial_mode() -> bool:
 	if _cfg == null:
 		return false
-	for sid in SimpleHUDConfigScript.STAT_IDS:
+	for sid in _stat_ids():
+		if !_is_stat_enabled(sid):
+			continue
 		if bool(_cfg.get_radial(sid)):
 			return true
 	return false
@@ -1076,4 +1150,103 @@ func _percent_for(sid: StringName) -> float:
 			return _game_data.bodyStamina
 		SimpleHUDConfigScript.STAT_FATIGUE:
 			return _game_data.armStamina
+		&"helmet":
+			return _helmet_percent_cached
+		&"cat":
+			return _game_data.cat if bool(_game_data.get("catFound")) && !bool(_game_data.get("catDead")) else 0.0
+		&"plate":
+			return _plate_percent_cached
 	return 0.0
+
+
+func _is_stat_enabled(sid: StringName) -> bool:
+	match sid:
+		&"helmet":
+			return bool(_cfg.misc_vital_helmet_enabled) && _helmet_available_cached
+		&"cat":
+			return bool(_cfg.misc_vital_cat_enabled) && bool(_game_data.get("catFound")) && !bool(_game_data.get("catDead"))
+		&"plate":
+			return bool(_cfg.misc_vital_plate_enabled) && _plate_available_cached
+		_:
+			return true
+
+
+func _refresh_equipment_status_cache() -> void:
+	if !bool(_cfg.misc_vital_helmet_enabled) && !bool(_cfg.misc_vital_plate_enabled):
+		_helmet_percent_cached = 0.0
+		_plate_percent_cached = 0.0
+		_helmet_available_cached = false
+		_plate_available_cached = false
+		return
+	var frame := Engine.get_process_frames()
+	if frame < _next_interface_probe_frame:
+		return
+	_next_interface_probe_frame = frame + _INTERFACE_PROBE_INTERVAL_FRAMES
+	var ui := _resolve_interface_node()
+	if ui == null:
+		_helmet_percent_cached = 0.0
+		_plate_percent_cached = 0.0
+		_helmet_available_cached = false
+		_plate_available_cached = false
+		return
+	_helmet_percent_cached = _read_slot_condition_percent(ui, 8)
+	_plate_percent_cached = _read_plate_condition_percent(ui, 7)
+	_helmet_available_cached = _helmet_percent_cached >= 0.0
+	_plate_available_cached = _plate_percent_cached >= 0.0
+	if !_helmet_available_cached:
+		_helmet_percent_cached = 0.0
+	if !_plate_available_cached:
+		_plate_percent_cached = 0.0
+
+
+func _resolve_interface_node() -> Node:
+	if _interface_node != null && is_instance_valid(_interface_node):
+		return _interface_node
+	var tree := get_tree()
+	if tree == null || tree.root == null:
+		return null
+	var stack: Array = [tree.root]
+	while !stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n != null && str(n.name) == "Interface" && n.get("equipmentUI") != null:
+			_interface_node = n
+			return _interface_node
+		for c in n.get_children():
+			stack.append(c)
+	return null
+
+
+func _read_plate_condition_percent(interface_node: Node, slot_idx: int) -> float:
+	var equipment_ui: Node = interface_node.get("equipmentUI") as Node
+	if equipment_ui == null || slot_idx < 0 || slot_idx >= equipment_ui.get_child_count():
+		return -1.0
+	var slot := equipment_ui.get_child(slot_idx)
+	if slot == null || slot.get_child_count() == 0:
+		return -1.0
+	var item_node: Node = slot.get_child(0)
+	var slot_data: Variant = item_node.get("slotData")
+	if slot_data == null:
+		return -1.0
+	var nested: Variant = slot_data.get("nested")
+	if nested is Array:
+		for nv in nested as Array:
+			if nv == null:
+				continue
+			var t := str(nv.get("type", ""))
+			if t == "Armor":
+				return clampf(float(slot_data.get("condition", 0.0)), 0.0, 100.0)
+	return -1.0
+
+
+func _read_slot_condition_percent(interface_node: Node, slot_idx: int) -> float:
+	var equipment_ui: Node = interface_node.get("equipmentUI") as Node
+	if equipment_ui == null || slot_idx < 0 || slot_idx >= equipment_ui.get_child_count():
+		return -1.0
+	var slot := equipment_ui.get_child(slot_idx)
+	if slot == null || slot.get_child_count() == 0:
+		return -1.0
+	var item_node: Node = slot.get_child(0)
+	var slot_data: Variant = item_node.get("slotData")
+	if slot_data == null:
+		return -1.0
+	return clampf(float(slot_data.get("condition", 0.0)), 0.0, 100.0)

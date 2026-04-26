@@ -51,6 +51,13 @@ var _fps_hide_label_cb: CheckBox
 var _fps_hide_label_row: Control
 var _map_label_mode_opt: OptionButton
 var _map_label_mode_row: Control
+var _helmet_vital_cb: CheckBox
+var _cat_vital_cb: CheckBox
+var _plate_vital_cb: CheckBox
+var _encumbrance_cb: CheckBox
+var _inventory_value_cb: CheckBox
+var _fps_cluster_justify_opt: OptionButton
+var _fps_cluster_align_opt: OptionButton
 var _crosshair_rgb_title: Label
 var _crosshair_rgb_row: Control
 var _crosshair_r_spin: SpinBox
@@ -93,15 +100,19 @@ var _current_preset_value: Label
 var _customize_toggle_btn: Button
 var _vitals_toggle_btn: Button
 var _ailments_toggle_btn: Button
+var _fps_map_toggle_btn: Button
 var _misc_toggle_btn: Button
 var _customize_open: bool = false
 var _vitals_open: bool = false
 var _ailments_open: bool = false
+var _fps_map_open: bool = false
 var _misc_open: bool = false
 var _vitals_start_idx: int = -1
 var _vitals_end_idx: int = -1
 var _ailments_start_idx: int = -1
 var _ailments_end_idx: int = -1
+var _fps_map_start_idx: int = -1
+var _fps_map_end_idx: int = -1
 var _misc_start_idx: int = -1
 var _misc_end_idx: int = -1
 
@@ -155,13 +166,15 @@ func build(vbox: VBoxContainer) -> void:
 	_customize_toggle_btn.pressed.connect(_on_customize_toggled)
 	vbox.add_child(_customize_toggle_btn)
 
+	## ── Vitals ──────────────────────────────────────────────────────────────
+	## Order: Display → Edge → Edge Margin → Alignment → Spacing →
+	##        Fill Empty Space → Scale → Threshold → Transparency → Opacity → Gradient
 	_vitals_toggle_btn = Button.new()
 	_vitals_toggle_btn.toggle_mode = true
 	_vitals_toggle_btn.button_pressed = _vitals_open
 	_vitals_toggle_btn.focus_mode = Control.FOCUS_ALL
 	_vitals_toggle_btn.pressed.connect(_on_vitals_section_toggled)
 	vbox.add_child(_vitals_toggle_btn)
-
 	_vitals_start_idx = vbox.get_child_count()
 
 	var vt := Label.new()
@@ -169,19 +182,21 @@ func build(vbox: VBoxContainer) -> void:
 	vt.add_theme_font_size_override("font_size", 18)
 	vbox.add_child(vt)
 
-	_stat_threshold = _add_labeled_spin(vbox, "Minimum display threshold", 0, 101, 1, 0)
-	_stat_threshold.value_changed.connect(_on_stat_field_changed_val)
+	_stat_mode = _add_labeled_option(vbox, "Display", ["Numeric", "Radial"])
+	_stat_mode.item_selected.connect(_on_stat_field_changed)
 
-	_vitals_strip_align_opt = _add_labeled_option(
-		vbox,
-		"Order on edge",
-		[
-			"Left to right",
-			"Centered on the edge",
-			"Right to left",
-		],
-	)
+	_stat_anchor = _add_labeled_option(vbox, "Edge", ["Top", "Bottom", "Left", "Right"])
+	_stat_anchor.item_selected.connect(_on_vitals_anchor_changed)
+	_refresh_vitals_order_option_items("leading")
+
+	_stat_padding = _add_labeled_spin(vbox, "Edge Margin (px)", 0, 512, 1, 0)
+	_stat_padding.value_changed.connect(_on_stat_field_changed_val)
+
+	_vitals_strip_align_opt = _add_labeled_option(vbox, "Alignment", ["Left to right", "Centered on the edge", "Right to left"])
 	_vitals_strip_align_opt.item_selected.connect(_on_vitals_strip_align_changed)
+
+	_spacing_spin = _add_labeled_spin(vbox, "Spacing between vitals (px)", 0, 256, 1, 0)
+	_spacing_spin.value_changed.connect(_on_spacing_strip_changed)
 
 	_vitals_fill_empty_cb = CheckBox.new()
 	_vitals_fill_empty_cb.text = "Fill empty space"
@@ -189,29 +204,13 @@ func build(vbox: VBoxContainer) -> void:
 	_vitals_fill_empty_cb.toggled.connect(_on_vitals_fill_empty_toggled)
 	vbox.add_child(_vitals_fill_empty_cb)
 
-	_stat_mode = _add_labeled_option(vbox, "Display", ["Numeric", "Radial"])
-	_stat_mode.item_selected.connect(_on_stat_field_changed)
-
-	_stat_anchor = _add_labeled_option(
-		vbox,
-		"Edge",
-		["Top", "Bottom", "Left", "Right"],
-	)
-	_stat_anchor.item_selected.connect(_on_vitals_anchor_changed)
-	_refresh_vitals_order_option_items("leading")
-
-	_stat_padding = _add_labeled_spin(vbox, "Edge Padding (px)", 0, 512, 1, 0)
-	_stat_padding.value_changed.connect(_on_stat_field_changed_val)
-	_spacing_spin = _add_labeled_spin(vbox, "Spacing between vitals", 0, 256, 1, 0)
-	_spacing_spin.value_changed.connect(_on_spacing_strip_changed)
 	_stat_scale = _add_labeled_spin(vbox, "Scale (%)", 25, 400, 5, 0)
 	_stat_scale.value_changed.connect(_on_stat_field_changed_val)
 
-	_vitals_transparency_opt = _add_labeled_option(
-		vbox,
-		"Transparency",
-		["Dynamic", "Static"],
-	)
+	_stat_threshold = _add_labeled_spin(vbox, "Minimum display threshold (%)", 0, 101, 1, 0)
+	_stat_threshold.value_changed.connect(_on_stat_field_changed_val)
+
+	_vitals_transparency_opt = _add_labeled_option(vbox, "Transparency", ["Dynamic", "Static"])
 	_vitals_transparency_opt.item_selected.connect(_on_vitals_transparency_changed)
 
 	var static_row := HBoxContainer.new()
@@ -232,11 +231,7 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(static_row)
 	_vitals_static_opacity_row = static_row
 
-	_grad_mode = _add_labeled_option(
-		vbox,
-		"Vital colors",
-		["Preset default", "White only", "Custom gradient"],
-	)
+	_grad_mode = _add_labeled_option(vbox, "Vital colors", ["Preset default", "White only", "Custom gradient"])
 	_grad_mode.item_selected.connect(_on_grad_mode_changed)
 
 	_grad_custom = VBoxContainer.new()
@@ -326,6 +321,9 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(HSeparator.new())
 	_vitals_end_idx = vbox.get_child_count() - 1
 
+	## ── Ailments ─────────────────────────────────────────────────────────────
+	## Order: Auto-hide → Edge → Edge Margin → Alignment → Spacing →
+	##        Fill Empty Space → Scale → Inactive Opacity → Active Color → Inactive Color
 	_ailments_toggle_btn = Button.new()
 	_ailments_toggle_btn.toggle_mode = true
 	_ailments_toggle_btn.button_pressed = _ailments_open
@@ -334,28 +332,22 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(_ailments_toggle_btn)
 	_ailments_start_idx = vbox.get_child_count()
 
-	var title := Label.new()
-	title.text = "Ailment icons"
-	title.add_theme_font_size_override("font_size", 18)
-	vbox.add_child(title)
+	var at := Label.new()
+	at.text = "Ailment Icons"
+	at.add_theme_font_size_override("font_size", 18)
+	vbox.add_child(at)
 
 	_auto_hide_cb = CheckBox.new()
-	_auto_hide_cb.text = "Hide tray when no active ailments"
+	_auto_hide_cb.text = "Auto-hide when no active ailments"
 	_auto_hide_cb.focus_mode = Control.FOCUS_NONE
 	_auto_hide_cb.toggled.connect(_on_auto_hide_toggled)
 	vbox.add_child(_auto_hide_cb)
-
-	_ailments_fill_empty_cb = CheckBox.new()
-	_ailments_fill_empty_cb.text = "Fill empty space"
-	_ailments_fill_empty_cb.focus_mode = Control.FOCUS_NONE
-	_ailments_fill_empty_cb.toggled.connect(_on_ailments_fill_empty_toggled)
-	vbox.add_child(_ailments_fill_empty_cb)
 
 	var anchor_row := HBoxContainer.new()
 	anchor_row.add_theme_constant_override("separation", 8)
 	var anchor_lbl := Label.new()
 	anchor_lbl.text = "Edge"
-	anchor_lbl.custom_minimum_size.x = 120
+	anchor_lbl.custom_minimum_size.x = 160
 	anchor_row.add_child(anchor_lbl)
 	_anchor_option = OptionButton.new()
 	_anchor_option.focus_mode = Control.FOCUS_ALL
@@ -368,10 +360,13 @@ func build(vbox: VBoxContainer) -> void:
 	anchor_row.add_child(_anchor_option)
 	vbox.add_child(anchor_row)
 
+	_padding_spin = _add_labeled_spin(vbox, "Edge Margin (px)", 0, 512, 1, 0)
+	_padding_spin.value_changed.connect(_on_padding_changed)
+
 	var spread_row := HBoxContainer.new()
 	spread_row.add_theme_constant_override("separation", 8)
 	var spread_lbl := Label.new()
-	spread_lbl.text = "Icon order on edge"
+	spread_lbl.text = "Alignment"
 	spread_lbl.custom_minimum_size.x = 160
 	spread_row.add_child(spread_lbl)
 	_status_strip_align_opt = OptionButton.new()
@@ -381,14 +376,20 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(spread_row)
 	_status_strip_align_opt.item_selected.connect(_on_status_field_changed)
 
-	_padding_spin = _add_labeled_spin(vbox, "Edge padding (px)", 0, 512, 1, 0)
-	_padding_spin.value_changed.connect(_on_padding_changed)
-
 	_status_spacing_spin = _add_labeled_spin(vbox, "Spacing between (px)", 0, 64, 1, 0)
 	_status_spacing_spin.value_changed.connect(_on_status_spacing_changed)
 
+	_ailments_fill_empty_cb = CheckBox.new()
+	_ailments_fill_empty_cb.text = "Fill empty space"
+	_ailments_fill_empty_cb.focus_mode = Control.FOCUS_NONE
+	_ailments_fill_empty_cb.toggled.connect(_on_ailments_fill_empty_toggled)
+	vbox.add_child(_ailments_fill_empty_cb)
+
 	_scale_spin = _add_labeled_spin(vbox, "Scale (%)", 25, 400, 5, 0)
 	_scale_spin.value_changed.connect(_on_scale_changed)
+
+	_inactive_alpha_spin = _add_labeled_spin(vbox, "Inactive ailment opacity (%)", 0, 100, 1, 0)
+	_inactive_alpha_spin.value_changed.connect(_on_status_numeric_field_changed)
 
 	var rgb_title := Label.new()
 	rgb_title.text = "Active ailment tint (RGB)"
@@ -419,12 +420,92 @@ func build(vbox: VBoxContainer) -> void:
 	_ig_spin.value_changed.connect(_on_inactive_rgb_changed)
 	_ib_spin.value_changed.connect(_on_inactive_rgb_changed)
 	vbox.add_child(in_rgb_row)
-
-	_inactive_alpha_spin = _add_labeled_spin(vbox, "Inactive ailment opacity (%)", 0, 100, 1, 0)
-	_inactive_alpha_spin.value_changed.connect(_on_status_numeric_field_changed)
 	vbox.add_child(HSeparator.new())
 	_ailments_end_idx = vbox.get_child_count() - 1
 
+	## ── FPS / Map ─────────────────────────────────────────────────────────────
+	## Order: Equipment vitals → [sep] → FPS Label → Map Label →
+	##        Edge → Alignment → Encumbrance → Backpack Value
+	_fps_map_toggle_btn = Button.new()
+	_fps_map_toggle_btn.toggle_mode = true
+	_fps_map_toggle_btn.button_pressed = _fps_map_open
+	_fps_map_toggle_btn.focus_mode = Control.FOCUS_ALL
+	_fps_map_toggle_btn.pressed.connect(_on_fps_map_section_toggled)
+	vbox.add_child(_fps_map_toggle_btn)
+	_fps_map_start_idx = vbox.get_child_count()
+
+	var fpm_title := Label.new()
+	fpm_title.text = "FPS / Map"
+	fpm_title.add_theme_font_size_override("font_size", 18)
+	vbox.add_child(fpm_title)
+
+	_helmet_vital_cb = CheckBox.new()
+	_helmet_vital_cb.text = "Show Helmet Vital"
+	_helmet_vital_cb.focus_mode = Control.FOCUS_NONE
+	_helmet_vital_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_helmet_vital_cb)
+
+	_cat_vital_cb = CheckBox.new()
+	_cat_vital_cb.text = "Show Cat Vital"
+	_cat_vital_cb.focus_mode = Control.FOCUS_NONE
+	_cat_vital_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_cat_vital_cb)
+
+	_plate_vital_cb = CheckBox.new()
+	_plate_vital_cb.text = "Show Plate Vital"
+	_plate_vital_cb.focus_mode = Control.FOCUS_NONE
+	_plate_vital_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_plate_vital_cb)
+
+	vbox.add_child(HSeparator.new())
+
+	_fps_hide_label_cb = CheckBox.new()
+	_fps_hide_label_cb.text = "Hide \"FPS:\" label prefix"
+	_fps_hide_label_cb.focus_mode = Control.FOCUS_NONE
+	_fps_hide_label_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_fps_hide_label_cb)
+	_fps_hide_label_row = _fps_hide_label_cb
+
+	var map_mode_row := HBoxContainer.new()
+	map_mode_row.add_theme_constant_override("separation", 8)
+	var map_mode_lbl := Label.new()
+	map_mode_lbl.text = "Map label format"
+	map_mode_lbl.custom_minimum_size.x = 160
+	map_mode_row.add_child(map_mode_lbl)
+	_map_label_mode_opt = OptionButton.new()
+	_map_label_mode_opt.focus_mode = Control.FOCUS_ALL
+	_map_label_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_label_mode_opt.add_item("Default (Village (Area 05))")
+	_map_label_mode_opt.add_item("Map Only (Village)")
+	_map_label_mode_opt.add_item("Region Only (Area 05)")
+	_map_label_mode_opt.item_selected.connect(_on_misc_field_changed_idx)
+	map_mode_row.add_child(_map_label_mode_opt)
+	vbox.add_child(map_mode_row)
+	_map_label_mode_row = map_mode_row
+
+	_fps_cluster_justify_opt = _add_labeled_option(vbox, "Edge", ["Top", "Bottom", "Left", "Right"])
+	_fps_cluster_justify_opt.item_selected.connect(_on_misc_field_changed_idx)
+
+	_fps_cluster_align_opt = _add_labeled_option(vbox, "Alignment", ["Leading", "Centered on edge", "Trailing"])
+	_fps_cluster_align_opt.item_selected.connect(_on_misc_field_changed_idx)
+
+	_encumbrance_cb = CheckBox.new()
+	_encumbrance_cb.text = "Show Encumbrance %"
+	_encumbrance_cb.focus_mode = Control.FOCUS_NONE
+	_encumbrance_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_encumbrance_cb)
+
+	_inventory_value_cb = CheckBox.new()
+	_inventory_value_cb.text = "Show Backpack Value"
+	_inventory_value_cb.focus_mode = Control.FOCUS_NONE
+	_inventory_value_cb.toggled.connect(_on_misc_field_toggled)
+	vbox.add_child(_inventory_value_cb)
+
+	vbox.add_child(HSeparator.new())
+	_fps_map_end_idx = vbox.get_child_count() - 1
+
+	## ── Misc (Compass + Crosshair only) ──────────────────────────────────────
+	## Crosshair color RGB is placed adjacent to other crosshair settings (before hide options).
 	_misc_toggle_btn = Button.new()
 	_misc_toggle_btn.toggle_mode = true
 	_misc_toggle_btn.button_pressed = _misc_open
@@ -538,6 +619,23 @@ func build(vbox: VBoxContainer) -> void:
 	_crosshair_scale_spin.value_changed.connect(_on_misc_field_changed)
 	_crosshair_scale_row = _crosshair_scale_spin.get_parent()
 
+	## Crosshair color RGB — placed with crosshair settings, not at section end.
+	_crosshair_rgb_title = Label.new()
+	_crosshair_rgb_title.text = "Crosshair color (RGB)"
+	_crosshair_rgb_title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(_crosshair_rgb_title)
+
+	var xr_rgb_row := HBoxContainer.new()
+	xr_rgb_row.add_theme_constant_override("separation", 8)
+	_crosshair_r_spin = _mini_spin(xr_rgb_row, "R", 0, 255)
+	_crosshair_g_spin = _mini_spin(xr_rgb_row, "G", 0, 255)
+	_crosshair_b_spin = _mini_spin(xr_rgb_row, "B", 0, 255)
+	_crosshair_r_spin.value_changed.connect(_on_misc_field_changed)
+	_crosshair_g_spin.value_changed.connect(_on_misc_field_changed)
+	_crosshair_b_spin.value_changed.connect(_on_misc_field_changed)
+	vbox.add_child(xr_rgb_row)
+	_crosshair_rgb_row = xr_rgb_row
+
 	_crosshair_bloom_cb = CheckBox.new()
 	_crosshair_bloom_cb.text = "Bloom (dynamic spread expansion)"
 	_crosshair_bloom_cb.focus_mode = Control.FOCUS_NONE
@@ -559,49 +657,7 @@ func build(vbox: VBoxContainer) -> void:
 	vbox.add_child(_crosshair_hide_stowed_cb)
 	_crosshair_hide_stowed_row = _crosshair_hide_stowed_cb
 
-	var crosshair_end_sep := HSeparator.new()
-	vbox.add_child(crosshair_end_sep)
-	_crosshair_group_end_sep = crosshair_end_sep
-
-	_fps_hide_label_cb = CheckBox.new()
-	_fps_hide_label_cb.text = "Hide \"FPS:\" label prefix"
-	_fps_hide_label_cb.focus_mode = Control.FOCUS_NONE
-	_fps_hide_label_cb.toggled.connect(_on_misc_field_toggled)
-	vbox.add_child(_fps_hide_label_cb)
-	_fps_hide_label_row = _fps_hide_label_cb
-
-	var map_mode_row := HBoxContainer.new()
-	map_mode_row.add_theme_constant_override("separation", 8)
-	var map_mode_lbl := Label.new()
-	map_mode_lbl.text = "Map label format"
-	map_mode_lbl.custom_minimum_size.x = 160
-	map_mode_row.add_child(map_mode_lbl)
-	_map_label_mode_opt = OptionButton.new()
-	_map_label_mode_opt.focus_mode = Control.FOCUS_ALL
-	_map_label_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_map_label_mode_opt.add_item("Default (Village (Area 05))")
-	_map_label_mode_opt.add_item("Map Only (Village)")
-	_map_label_mode_opt.add_item("Region Only (Area 05)")
-	_map_label_mode_opt.item_selected.connect(_on_misc_field_changed_idx)
-	map_mode_row.add_child(_map_label_mode_opt)
-	vbox.add_child(map_mode_row)
-	_map_label_mode_row = map_mode_row
-
-	_crosshair_rgb_title = Label.new()
-	_crosshair_rgb_title.text = "Crosshair color (RGB)"
-	_crosshair_rgb_title.add_theme_font_size_override("font_size", 14)
-	vbox.add_child(_crosshair_rgb_title)
-
-	var xr_rgb_row := HBoxContainer.new()
-	xr_rgb_row.add_theme_constant_override("separation", 8)
-	_crosshair_r_spin = _mini_spin(xr_rgb_row, "R", 0, 255)
-	_crosshair_g_spin = _mini_spin(xr_rgb_row, "G", 0, 255)
-	_crosshair_b_spin = _mini_spin(xr_rgb_row, "B", 0, 255)
-	_crosshair_r_spin.value_changed.connect(_on_misc_field_changed)
-	_crosshair_g_spin.value_changed.connect(_on_misc_field_changed)
-	_crosshair_b_spin.value_changed.connect(_on_misc_field_changed)
-	vbox.add_child(xr_rgb_row)
-	_crosshair_rgb_row = xr_rgb_row
+	_crosshair_group_end_sep = null  ## No longer needed; crosshair is last group in Misc.
 
 	vbox.add_child(HSeparator.new())
 	_misc_end_idx = vbox.get_child_count() - 1
@@ -638,12 +694,17 @@ func _refresh_expandable_state() -> void:
 		_ailments_toggle_btn.visible = _customize_open
 		_ailments_toggle_btn.text = "Ailments %s" % ("▼" if _ailments_open else "▶")
 		_ailments_toggle_btn.button_pressed = _ailments_open
+	if _fps_map_toggle_btn != null:
+		_fps_map_toggle_btn.visible = _customize_open
+		_fps_map_toggle_btn.text = "FPS / Map %s" % ("▼" if _fps_map_open else "▶")
+		_fps_map_toggle_btn.button_pressed = _fps_map_open
 	if _misc_toggle_btn != null:
 		_misc_toggle_btn.visible = _customize_open
 		_misc_toggle_btn.text = "Misc %s" % ("▼" if _misc_open else "▶")
 		_misc_toggle_btn.button_pressed = _misc_open
 	_set_vbox_children_visible(root, _vitals_start_idx, _vitals_end_idx, _customize_open && _vitals_open)
 	_set_vbox_children_visible(root, _ailments_start_idx, _ailments_end_idx, _customize_open && _ailments_open)
+	_set_vbox_children_visible(root, _fps_map_start_idx, _fps_map_end_idx, _customize_open && _fps_map_open)
 	_set_vbox_children_visible(root, _misc_start_idx, _misc_end_idx, _customize_open && _misc_open)
 	# Re-apply nested Misc visibility after section-level visibility changes.
 	_update_misc_compass_rows_visibility()
@@ -677,6 +738,11 @@ func _on_misc_section_toggled() -> void:
 	_refresh_expandable_state()
 
 
+func _on_fps_map_section_toggled() -> void:
+	_fps_map_open = _fps_map_toggle_btn.button_pressed if _fps_map_toggle_btn != null else _fps_map_open
+	_refresh_expandable_state()
+
+
 func _panel_menu_log(msg: String) -> void:
 	var mm: Variant = Engine.get_meta(&"SimpleHUDMain", null)
 	if mm != null && (mm as Object).has_method(&"log_menu_panel_diag"):
@@ -701,6 +767,7 @@ func on_menu_opened() -> void:
 	_customize_open = false
 	_vitals_open = false
 	_ailments_open = false
+	_fps_map_open = false
 	_misc_open = false
 	_refresh_expandable_state()
 	sync_from_main()
@@ -933,6 +1000,27 @@ func sync_from_main() -> void:
 		_crosshair_r_spin.set_value_no_signal(float(misc.get("crosshair_r", 220)))
 		_crosshair_g_spin.set_value_no_signal(float(misc.get("crosshair_g", 220)))
 		_crosshair_b_spin.set_value_no_signal(float(misc.get("crosshair_b", 220)))
+		_helmet_vital_cb.set_pressed_no_signal(bool(misc.get("vital_helmet_enabled", false)))
+		_cat_vital_cb.set_pressed_no_signal(bool(misc.get("vital_cat_enabled", false)))
+		_plate_vital_cb.set_pressed_no_signal(bool(misc.get("vital_plate_enabled", false)))
+		_encumbrance_cb.set_pressed_no_signal(bool(misc.get("show_encumbrance_pct", false)))
+		_inventory_value_cb.set_pressed_no_signal(bool(misc.get("show_inventory_value", false)))
+		match str(misc.get("fps_map_cluster_justify", "top")).to_lower():
+			"bottom":
+				_fps_cluster_justify_opt.select(1)
+			"left":
+				_fps_cluster_justify_opt.select(2)
+			"right":
+				_fps_cluster_justify_opt.select(3)
+			_:
+				_fps_cluster_justify_opt.select(0)
+		match str(misc.get("fps_map_cluster_alignment", "leading")).to_lower():
+			"center":
+				_fps_cluster_align_opt.select(1)
+			"trailing":
+				_fps_cluster_align_opt.select(2)
+			_:
+				_fps_cluster_align_opt.select(0)
 	_update_misc_compass_rows_visibility()
 
 	var vm := str(strip.get("vitals_transparency_mode", "dynamic"))
@@ -1122,7 +1210,14 @@ func _apply_misc_from_ui() -> void:
 		_crosshair_hide_ads_cb.button_pressed,
 		_crosshair_hide_stowed_cb.button_pressed,
 		_fps_hide_label_cb.button_pressed,
-		"map_only" if _map_label_mode_opt.selected == 1 else ("region_only" if _map_label_mode_opt.selected == 2 else "default")
+		"map_only" if _map_label_mode_opt.selected == 1 else ("region_only" if _map_label_mode_opt.selected == 2 else "default"),
+		_helmet_vital_cb.button_pressed,
+		_cat_vital_cb.button_pressed,
+		_plate_vital_cb.button_pressed,
+		_encumbrance_cb.button_pressed,
+		_inventory_value_cb.button_pressed,
+		["top", "bottom", "left", "right"][_fps_cluster_justify_opt.selected],
+		["leading", "center", "trailing"][_fps_cluster_align_opt.selected]
 	)
 	_refresh_current_preset_label()
 
@@ -1153,10 +1248,6 @@ func _update_misc_compass_rows_visibility() -> void:
 		(_crosshair_hide_stowed_row as CanvasItem).visible = show_crosshair
 	if _crosshair_group_end_sep != null:
 		(_crosshair_group_end_sep as CanvasItem).visible = show_crosshair
-	if _fps_hide_label_row != null:
-		(_fps_hide_label_row as CanvasItem).visible = show_misc
-	if _map_label_mode_row != null:
-		(_map_label_mode_row as CanvasItem).visible = show_misc
 	if _crosshair_rgb_title != null:
 		_crosshair_rgb_title.visible = show_crosshair
 	if _crosshair_rgb_row != null:

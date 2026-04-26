@@ -4,6 +4,35 @@ All downloads are for the latest versions only. Previous version can be built us
 
 All notable changes to `SimpleHUD` are documented in this file.
 
+## [1.0.6] - 2026-04-25
+
+### Added (Show All Vitals hotkey)
+- Added a **Show All Vitals** hold-key (default `-`, rebindable) that bypasses all threshold and transparency logic to show every vital at full opacity while held.
+- Does not affect the ailment/status tray — binary icons have no meaningful inactive state to bypass.
+- Matches the existing Toggle HUD implementation pattern: same keybind persistence, same binding-UI injection, same `InputMap` action registration.
+
+### Added (MCM release variant)
+- Added `SimpleUI-MCM.vmz` as an optional release alongside the standard `SimpleUI.vmz`.
+- MCM variant requires **Mod Configuration Menu** by Doink Oink (modworkshop.net/mod/53713) installed alongside it.
+- MCM variant exposes Vitals, Ailments, Keybinds, and Misc settings directly inside the MCM menu — no in-game main-menu button is injected.
+- Settings are stored in `user://MCM/simple-hud/config.ini` and synced back to `user://simplehud_preferences.json` for cross-format compatibility.
+- The standard `SimpleUI.vmz` is unchanged and does not require MCM.
+
+### Changed (internal performance)
+- Per-frame `get_node_or_null` calls for vanilla HUD child nodes replaced with nodes cached at bind time.
+- `_preferences_cache` read path now uses `FileAccess.get_modified_time()` — file is re-deserialized only when the mtime changes, reducing OS file I/O.
+- `Preferences.tres` mtime check is further rate-limited to once per 30 frames (~0.5 s at 60 fps).
+- Keybinding-UI DFS scan cached after first successful find — subsequent 90-frame probes hit the cached node directly.
+- `_resource_is_game_data()` rewritten to O(1) — two direct property probes instead of full property-list iteration.
+- `StatusTray._icon_paths()` array allocation converted to a `static var` cache (built once, reused every refresh).
+- `HudOverlay._widget_defs()` array allocation converted to a `static var` cache.
+- Fill-empty vitals layout changes now debounced at 200 ms (`Time.get_ticks_usec()`) to prevent relayout thrashing when vitals fluctuate across thresholds mid-combat.
+- `_layout_vitals()` internal grouping now uses four pre-allocated arrays instead of a Dictionary to avoid per-frame allocation.
+- Show All Vitals keypress immediately bypasses the fill-empty debounce (via `mark_layout_dirty()`) for instant repositioning when held/released.
+
+### Fixed (config correctness)
+- `StatusTray.setup()` now always resets the config fast-hash at entry — previously, icon color changes during a no-rebuild path could leave stale cache and skip the color update.
+
 ## [1.0.5] - 2026-04-25
 
 ### Added (notable gameplay HUD features)

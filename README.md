@@ -6,26 +6,30 @@ This README is for maintainers/contributors.
 
 ## Current Product Model
 
-SimpleHUD now ships as a **single VMZ** with:
+SimpleHUD ships as **two VMZ variants**:
 
-- runtime preset switching in the in-game main-menu SimpleHUD panel
-- full user customization for vitals + ailments
-- persistent user overrides saved to `user://simplehud_preferences.json`
+- `SimpleUI.vmz` — standard build; in-game main-menu button for all settings
+- `SimpleUI-MCM.vmz` — MCM build; requires **Mod Configuration Menu** by Doink Oink; no main-menu button (MCM is the config surface)
+
+Both use the same preset/config system and share `user://simplehud_preferences.json`.
 
 The old multi-VMZ-per-preset distribution model is deprecated.
 
-## 1.0.5 Release Notes
+## 1.0.6 Release Notes
 
-- Compass and Dynamic Crosshair are now marked as beta in the settings UI with italic yellow `*Beta` labels.
-- Crosshair rendering is optimized to reduce draw/update overhead during gameplay.
-- Disabled beta chrome features (Compass/Crosshair) now fully skip per-frame update paths to minimize any performance impact on the main HUD feature set.
-- Vitals edge alignment fixes improve left/right `Centered on edge` and trailing placement consistency at different resolutions.
-- Vitals layout now reflows reliably when active visible vitals change, preventing stale top-left placement in edge cases.
+- Added **Show All Vitals** hold-key (default `-`): bypasses thresholds and transparency to show all vitals at full opacity while held.
+- Added MCM integration variant (`SimpleUI-MCM.vmz`) with `SimpleHUD/MCM/SimpleHUDMCMConfig.gd` autoload.
+- Internal performance pass: node caches, mtime-gated preference reads, fill-empty debounce, static array caches.
+- Fixed `StatusTray` config fast-hash stale-cache bug on icon color changes without layout rebuild.
 
 ## Project Layout
 
 - `mod.txt`  
-  Mod metadata and autoload registration (`SimpleHUDMain`).
+  Mod metadata and autoload registration (`SimpleHUDMain`). Version matches current release.
+- `mod_mcm.txt`  
+  MCM build variant — registers `SimpleHUDMCM` before `SimpleHUDMain`; used by MCM VMZ build.
+- `SimpleHUD/MCM/SimpleHUDMCMConfig.gd`  
+  MCM autoload: signals MCM variant active, registers config sections with MCM, applies config changes.
 - `SimpleHUD/Main.gd`  
   Runtime entrypoint; installs main-menu panel, applies/syncs settings, handles preset matching and persistence.
 - `SimpleHUD/HudOverlay.gd`  
@@ -47,7 +51,7 @@ The old multi-VMZ-per-preset distribution model is deprecated.
 - `SimpleHUD.default.ini`  
   Packaged default INI (kept for fallback/layer support).
 - `build_simplehud_vmz.sh`  
-  Builds `mod/SimpleUI.vmz` (default baked preset: `RadialPlainNoHide`).
+  Builds both `mod/SimpleUI.vmz` and `mod/SimpleUI-MCM.vmz` (default baked preset: `RadialPlainNoHide`).
 
 ## Build + Packaging
 
@@ -59,25 +63,26 @@ From `SimpleHUD/`:
 
 Build output:
 
-- `mod/SimpleUI.vmz`
+- `mod/SimpleUI.vmz` — standard build (no MCM dependency, `SimpleHUD/MCM/` excluded)
+- `mod/SimpleUI-MCM.vmz` — MCM build (`SimpleHUD/MCM/` included, `mod_mcm.txt` used as `mod.txt`)
 
 CI output:
 
-- GitHub Actions workflow `.github/workflows/simplehud-vmz.yml` builds the same `SimpleHUD/mod/SimpleUI.vmz` using the existing shell script.
-- Every push/PR affecting `SimpleHUD/` uploads `SimpleHUD-SimpleUI-vmz` as a workflow artifact.
-- Tag builds (`v*` or `simplehud-v*`) also attach `SimpleHUD/mod/SimpleUI.vmz` to the GitHub Release as the player-facing deliverable.
+- GitHub Actions workflow `.github/workflows/simplehud-vmz.yml` builds the same outputs using the shell script.
+- Every push/PR affecting `SimpleHUD/` uploads both VMZ artifacts.
+- Tag builds (`v*` or `simplehud-v*`) attach both VMZ files to the GitHub Release.
 
-Archive includes:
+Archive includes (both builds):
 
-- `mod.txt`
+- `mod.txt` (standard: from `mod.txt`; MCM: from `mod_mcm.txt` renamed)
 - `SimpleHUD.default.ini`
-- `SimpleHUD/` runtime tree
+- `SimpleHUD/` runtime tree (standard excludes `SimpleHUD/MCM/`; MCM includes it)
 
 Build behavior:
 
 - copies each `presets/<Name>/Config.gd` into `SimpleHUD/preset_configs/<Name>.gd`
 - copies default preset config into staged `SimpleHUD/Config.gd`
-- zips staged runtime as one VMZ
+- produces both VMZs in a single run
 
 `Docs/` is repository-only and is not included in VMZ.
 

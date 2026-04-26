@@ -19,6 +19,9 @@ var _minimum_invalidated: bool = true
 func setup(game_data: Resource, cfg: RefCounted) -> void:
 	_game_data = game_data
 	_cfg = cfg
+	## Always invalidate the config snapshot so the next refresh() picks up any changes,
+	## even when the box layout itself doesn't need a rebuild (e.g. icon color change).
+	_last_cfg_fast = -2147483648
 
 	var horizontal: bool = str(_cfg.status_stack_direction) == "horizontal_left"
 	var rebuild := _box == null
@@ -74,20 +77,24 @@ func set_game_data(r: Resource) -> void:
 		_game_data = r
 
 
+static var _cached_icon_paths: Array = []
+
 static func _icon_paths() -> Array:
-	return [
-		[&"overweight", "res://UI/Sprites/Icon_Overweight.png"],
-		[&"starvation", "res://UI/Sprites/Icon_Starvation.png"],
-		[&"dehydration", "res://UI/Sprites/Icon_Dehydration.png"],
-		[&"bleeding", "res://UI/Sprites/Icon_Bleeding.png"],
-		[&"fracture", "res://UI/Sprites/Icon_Fracture.png"],
-		[&"burn", "res://UI/Sprites/Icon_Burn.png"],
-		[&"frostbite", "res://UI/Sprites/Icon_Frostbite.png"],
-		[&"insanity", "res://UI/Sprites/Icon_Insanity.png"],
-		[&"poisoning", "res://UI/Sprites/Icon_Poisoning.png"],
-		[&"rupture", "res://UI/Sprites/Icon_Rupture.png"],
-		[&"headshot", "res://UI/Sprites/Icon_Headshot.png"],
-	]
+	if _cached_icon_paths.is_empty():
+		_cached_icon_paths = [
+			[&"overweight", "res://UI/Sprites/Icon_Overweight.png"],
+			[&"starvation", "res://UI/Sprites/Icon_Starvation.png"],
+			[&"dehydration", "res://UI/Sprites/Icon_Dehydration.png"],
+			[&"bleeding", "res://UI/Sprites/Icon_Bleeding.png"],
+			[&"fracture", "res://UI/Sprites/Icon_Fracture.png"],
+			[&"burn", "res://UI/Sprites/Icon_Burn.png"],
+			[&"frostbite", "res://UI/Sprites/Icon_Frostbite.png"],
+			[&"insanity", "res://UI/Sprites/Icon_Insanity.png"],
+			[&"poisoning", "res://UI/Sprites/Icon_Poisoning.png"],
+			[&"rupture", "res://UI/Sprites/Icon_Rupture.png"],
+			[&"headshot", "res://UI/Sprites/Icon_Headshot.png"],
+		]
+	return _cached_icon_paths
 
 
 func _cfg_fast_id(
@@ -171,6 +178,10 @@ func refresh() -> void:
 			tex_bits |= (1 << bit_i)
 		bit_i += 1
 
+	## Cheap early-exit: game state and textures unchanged, and config hasn't been reset by setup().
+	## Skips the Color-constructing _cfg_fast_id() call in the common steady-state.
+	if bits == _last_game_bits && tex_bits == _last_tex_bits && _last_cfg_fast != -2147483648:
+		return
 	var cfg_fast := _cfg_fast_id(mode, fill_empty, px, ina, active_color, inactive_rgb)
 	if bits == _last_game_bits && tex_bits == _last_tex_bits && cfg_fast == _last_cfg_fast:
 		return
