@@ -15,6 +15,12 @@ Both use the same preset/config system and share `user://simplehud_preferences.j
 
 The old multi-VMZ-per-preset distribution model is deprecated.
 
+## 1.1.0 Release Notes
+
+- Added **Show on Change**: when a vital drops by at least a configurable threshold %, it is forced fully visible for a configurable duration. Configurable in both main-menu panel and MCM.
+- Added **Permadeath Icon**: configurable position (8 screen positions + Always Hide), scale %, and transparency %. Suppresses the vanilla HUD permadeath node when a position is chosen. Available in both main-menu panel and MCM.
+- Show on Change activation immediately bypasses the fill-empty layout debounce, preventing brief overlap when adjacent vitals reposition.
+
 ## 1.0.6 Release Notes
 
 - Added **Show All Vitals** hold-key: bypasses thresholds and transparency to show all vitals at full opacity while held.

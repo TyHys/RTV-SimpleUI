@@ -4,6 +4,26 @@ All downloads are for the latest versions only. Previous version can be built us
 
 All notable changes to `SimpleHUD` are documented in this file.
 
+## [1.1.0] - 2026-04-26
+
+### Added (Show on Change)
+- Added **Show on Change** — when a vital drops by at least a configurable minimum percentage in a single tick, it is forced fully visible for a configurable duration (default 4 s), bypassing threshold and transparency logic.
+- Configurable per the standard settings surfaces (main-menu panel and MCM): toggle on/off, minimum drop % (1–100, default 5%), and duration in seconds (0.5–30, default 4 s).
+- When Show on Change fires, the fill-empty layout debounce is immediately bypassed so vitals reposition without a 200 ms delay.
+- Does not interfere with the Show All Vitals hold-key — both can be active simultaneously.
+
+### Added (Permadeath Icon)
+- Added a configurable **Permadeath Icon** overlay to the Misc settings section.
+- When a position other than "Always Hide" is selected, SimpleHUD draws the permadeath skull icon at the chosen screen position and suppresses the vanilla HUD permadeath node.
+- Position choices: Always Hide, Top Left, Top Center, Top Right, Left Center, Right Center, Bottom Left, Bottom Center, Bottom Right.
+- **Icon Scale (%)**: adjusts the icon size relative to the vanilla 100 × 100 px baseline (range 10–400%).
+- **Icon Transparency (%)**: adjusts icon opacity (0–100%).
+- When "Always Hide" is selected, SimpleHUD's icon is hidden and the vanilla permadeath node is left for the game to manage independently.
+- All three settings are available in both the main-menu panel and MCM; both surfaces are equivalent.
+
+### Changed (MCM detection)
+- `SimpleUI.vmz` is now the only download. At startup it detects whether **Mod Configuration Menu** by Doink Oink is installed: if found, MCM becomes the configuration surface and the main-menu button is suppressed; if not found, the main-menu button is used as normal. No separate MCM variant is required.
+
 ## [1.0.6] - 2026-04-25
 
 ### Added (Show All Vitals hotkey)
