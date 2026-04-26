@@ -22,23 +22,20 @@
 
 ## Configuration
 
-### Standard build (`SimpleUI.vmz`)
+SimpleHUD ships as a single `.vmz`. On load it detects whether **Mod Configuration Menu** by Doink Oink is present and adapts automatically:
 
-Open the main menu and click **SimpleHUD**:
+* **MCM detected:** the main-menu button is suppressed and all settings are configured through the MCM panel.
+* **MCM not installed:** the main-menu button is shown and all settings are configured there instead.
+
+Both paths use the same settings file (`user://simplehud_preferences.json`) and expose the same options:
 
 * Pick a preset from the dropdown
 * See **Current Preset** status (preset name or `User Customized`)
-* Expand **Customize** to adjust:
-
-  * **Vitals:** edge, alignment, spacing, fill-empty-space, thresholds, transparency mode, gradient, Show on Change
-  * **Ailments:** edge, alignment, spacing, scale, auto-hide, fill-empty-space, active and inactive tint/opacity
-  * **Misc:** permadeath icon position/scale/transparency, compass, dynamic crosshair, FPS label, map label mode
+* Adjust **Vitals:** edge, alignment, spacing, fill-empty-space, thresholds, transparency mode, gradient, Show on Change
+* Adjust **Ailments:** edge, alignment, spacing, scale, auto-hide, fill-empty-space, active and inactive tint/opacity
+* Adjust **Misc:** permadeath icon position/scale/transparency, compass, dynamic crosshair, FPS label, map label mode
 
 Changes apply live and persist across sessions.
-
-### MCM build (`SimpleUI-MCM.vmz`)
-
-Install this variant if **Mod Configuration Menu** by Doink Oink is installed. The main-menu button is suppressed; all settings are configured through the MCM panel instead. Both builds use the same settings file (`user://simplehud_preferences.json`) and are otherwise identical.
 
 ## Presets
 
@@ -57,18 +54,11 @@ All presets ship in the single package. Select via the in-game dropdown.
 
 ## Installation
 
-### Standard build
-
 1. Install **Metro Mod Loader** per its documentation.
-2. Place `SimpleUI.vmz` in your mods directory.
-3. Launch the game and confirm Metro Mod Loader reports `Simple HUD` as loaded.
-4. Open the main menu and click **SimpleHUD** to select a preset or adjust settings.
-
-### MCM build
-
-1. Install **Metro Mod Loader** and **Mod Configuration Menu** by Doink Oink.
-2. Place `SimpleUI-MCM.vmz` (not `SimpleUI.vmz`) in your mods directory.
-3. Launch the game and configure SimpleHUD from the MCM menu.
+2. Optionally install **Mod Configuration Menu** by Doink Oink for MCM support.
+3. Place `SimpleUI.vmz` in your mods directory.
+4. Launch the game and confirm Metro Mod Loader reports `Simple HUD` as loaded.
+5. Configure SimpleHUD from the MCM panel (if MCM is installed) or from the main-menu **SimpleHUD** button.
 
 ## Version History (summary)
 
