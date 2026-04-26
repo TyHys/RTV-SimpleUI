@@ -591,18 +591,18 @@ func _build_default_mcm_config(main: Node) -> ConfigFile:
 	## ── Keybinds ──────────────────────────────────────────────────────────────
 	cfg.set_value("Keycode", "toggle_hud", {
 		"name": "Toggle HUD Key",
-		"default": KEY_EQUAL,
+		"default": KEY_NONE,
 		"default_type": "Key",
-		"value": KEY_EQUAL,
+		"value": KEY_NONE,
 		"type": "Key",
 		"category": "Keybinds",
 	})
 	cfg.set_value("Keycode", "show_all_vitals", {
 		"name": "Show All Vitals Key",
 		"tooltip": "Hold to show all vitals at full visibility.",
-		"default": KEY_MINUS,
+		"default": KEY_NONE,
 		"default_type": "Key",
-		"value": KEY_MINUS,
+		"value": KEY_NONE,
 		"type": "Key",
 		"category": "Keybinds",
 	})

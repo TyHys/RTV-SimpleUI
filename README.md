@@ -17,10 +17,11 @@ The old multi-VMZ-per-preset distribution model is deprecated.
 
 ## 1.0.6 Release Notes
 
-- Added **Show All Vitals** hold-key (default `-`): bypasses thresholds and transparency to show all vitals at full opacity while held.
+- Added **Show All Vitals** hold-key: bypasses thresholds and transparency to show all vitals at full opacity while held.
 - Added MCM integration variant (`SimpleUI-MCM.vmz`) with `SimpleHUD/MCM/SimpleHUDMCMConfig.gd` autoload.
 - Internal performance pass: node caches, mtime-gated preference reads, fill-empty debounce, static array caches.
 - Fixed `StatusTray` config fast-hash stale-cache bug on icon color changes without layout rebuild.
+- Changed default `Toggle HUD` and `Show All Vitals` keybinds to **unassigned** (bind in Controls/MCM as preferred).
 
 ## Project Layout
 
@@ -147,7 +148,7 @@ Ordering parity:
 - Preferences reads are cached (no per-frame `Preferences.tres` reloads)
 - Status tray icons are pooled and texture-cached instead of rebuilt each refresh
 - FPS text styling is applied once per HUD bind instead of every update
-- Debug print diagnostics default to off; warnings remain for real failure paths
+- Debug print diagnostics default to off in release builds; warnings remain for real failure paths
 
 ## Reference Docs
 

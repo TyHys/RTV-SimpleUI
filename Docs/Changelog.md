@@ -7,7 +7,7 @@ All notable changes to `SimpleHUD` are documented in this file.
 ## [1.0.6] - 2026-04-25
 
 ### Added (Show All Vitals hotkey)
-- Added a **Show All Vitals** hold-key (default `-`, rebindable) that bypasses all threshold and transparency logic to show every vital at full opacity while held.
+- Added a **Show All Vitals** hold-key (rebindable) that bypasses all threshold and transparency logic to show every vital at full opacity while held.
 - Does not affect the ailment/status tray — binary icons have no meaningful inactive state to bypass.
 - Matches the existing Toggle HUD implementation pattern: same keybind persistence, same binding-UI injection, same `InputMap` action registration.
 
@@ -29,6 +29,10 @@ All notable changes to `SimpleHUD` are documented in this file.
 - Fill-empty vitals layout changes now debounced at 200 ms (`Time.get_ticks_usec()`) to prevent relayout thrashing when vitals fluctuate across thresholds mid-combat.
 - `_layout_vitals()` internal grouping now uses four pre-allocated arrays instead of a Dictionary to avoid per-frame allocation.
 - Show All Vitals keypress immediately bypasses the fill-empty debounce (via `mark_layout_dirty()`) for instant repositioning when held/released.
+
+### Changed (keybind defaults + release diagnostics)
+- Default `Toggle HUD` and `Show All Vitals` keybinds are now unassigned (`KEY_NONE`) in both standard and MCM configs.
+- FPS/Map deep-diagnostic console logging is disabled by default for release (`SIMPLEHUD_FPSMAP_DIAG_LOG=false`).
 
 ### Fixed (config correctness)
 - `StatusTray.setup()` now always resets the config fast-hash at entry — previously, icon color changes during a no-rebuild path could leave stale cache and skip the color update.

@@ -19,7 +19,7 @@ const _HUD_WEIGHT_ICON_PATHS := [
 ## Set true to enable verbose console diagnostics during development.
 const SIMPLEHUD_DIAG_LOG := false
 ## Exhaustive FPS/Map diagnostics for runtime troubleshooting.
-const SIMPLEHUD_FPSMAP_DIAG_LOG := true
+const SIMPLEHUD_FPSMAP_DIAG_LOG := false
 
 ## Verbose diagnostics for main-menu SimpleHUD overlay (sizes, visibility, deferred layout).
 const SIMPLEHUD_MENU_PANEL_DIAG := false
@@ -1177,11 +1177,8 @@ func _prefs_bool(prefs: Resource, key: StringName, fallback: bool) -> bool:
 	return bool(v)
 
 
-func _toggle_hud_key_default_event() -> InputEventKey:
-	var ev := InputEventKey.new()
-	ev.physical_keycode = KEY_EQUAL
-	ev.keycode = KEY_EQUAL
-	return ev
+func _toggle_hud_key_default_event() -> InputEvent:
+	return null
 
 
 func _preferred_toggle_hud_event() -> InputEvent:
@@ -1203,10 +1200,7 @@ func _preferred_show_all_vitals_event() -> InputEvent:
 			var d := action_events as Dictionary
 			if d.has("show_all_vitals") && d["show_all_vitals"] is InputEvent:
 				return d["show_all_vitals"] as InputEvent
-	var ev := InputEventKey.new()
-	ev.physical_keycode = KEY_MINUS
-	ev.keycode = KEY_MINUS
-	return ev
+	return null
 
 
 func _ensure_toggle_hud_action() -> void:
@@ -1220,7 +1214,9 @@ func _ensure_toggle_hud_action() -> void:
 	if !InputMap.has_action(action_name):
 		return
 	if InputMap.action_get_events(action_name).is_empty():
-		InputMap.action_add_event(action_name, _preferred_toggle_hud_event())
+		var ev := _preferred_toggle_hud_event()
+		if ev != null:
+			InputMap.action_add_event(action_name, ev)
 	if !InputMap.action_get_events(action_name).is_empty():
 		_toggle_hud_action_ready = true
 
@@ -1236,7 +1232,9 @@ func _ensure_show_all_vitals_action() -> void:
 	if !InputMap.has_action(action_name):
 		return
 	if InputMap.action_get_events(action_name).is_empty():
-		InputMap.action_add_event(action_name, _preferred_show_all_vitals_event())
+		var ev := _preferred_show_all_vitals_event()
+		if ev != null:
+			InputMap.action_add_event(action_name, ev)
 	if !InputMap.action_get_events(action_name).is_empty():
 		_show_all_vitals_action_ready = true
 
@@ -1335,7 +1333,8 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 	var show_fps := _prefs_bool(prefs, &"FPS", true)
 	var show_map := _prefs_bool(prefs, &"map", true)
 	var menu_open_now := _game_data_menu_open(_live_game_data)
-	var iface_ok_now := _resolve_interface_node() != null
+	var iface := _resolve_interface_node()
+	var iface_ok_now := iface != null
 	if menu_open_now != _fps_map_prev_menu_open:
 		log_fpsmap_diag("menu state changed open=%s (prev=%s)" % [menu_open_now, _fps_map_prev_menu_open])
 		_fps_map_prev_menu_open = menu_open_now
@@ -1366,7 +1365,7 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 		&& is_equal_approx(oy, _fps_map_c_oy)
 		&& is_equal_approx(a, _fps_map_c_alpha)
 	):
-		var layout_changed := _update_fps_map_extra_lines(info, hud)
+		var layout_changed := _update_fps_map_extra_lines(info, hud, iface)
 		if layout_changed:
 			info.position = _fps_map_cluster_position(info, hud, ox, oy)
 		_position_fps_map_extras(info)
@@ -1381,7 +1380,7 @@ func _apply_fps_map(hud: Control, prefs: Resource) -> void:
 		_fpsmap_dump_cluster_snapshot("cached", info, hud, show_fps, show_map, ox, oy, sc, a)
 		return
 	info.scale = Vector2(sc, sc)
-	var changed_now := _update_fps_map_extra_lines(info, hud)
+	var changed_now := _update_fps_map_extra_lines(info, hud, iface)
 	info.position = _fps_map_cluster_position(info, hud, ox, oy)
 	if changed_now:
 		info.position = _fps_map_cluster_position(info, hud, ox, oy)
@@ -1497,7 +1496,7 @@ func _fps_map_core_text_bottom_offset_px(info: Control) -> float:
 	return clampf(off, 0.0, _fps_map_info_only_size(info).y)
 
 
-func _update_fps_map_extra_lines(info: Control, hud: Control) -> bool:
+func _update_fps_map_extra_lines(info: Control, hud: Control, iface: Node = null) -> bool:
 	var want_extra := bool(_cfg.fps_map_show_encumbrance_pct) || bool(_cfg.fps_map_show_inventory_value)
 	if !want_extra:
 		var was_visible := false
@@ -1543,7 +1542,8 @@ func _update_fps_map_extra_lines(info: Control, hud: Control) -> bool:
 		return false
 	var lines: Array[String] = []
 	var show_weight_icon := false
-	var iface := _resolve_interface_node()
+	if iface == null:
+		iface = _resolve_interface_node()
 	if iface == null:
 		log_fpsmap_diag("extras iface unresolved; retain last text=\"%s\"" % [_fps_extra_last_text])
 		return false
@@ -1593,7 +1593,12 @@ func _position_fps_map_extras(info: Control) -> void:
 	var icon_span := ((_FPS_MAP_ICON_SIDE_PX + _FPS_MAP_ICON_GAP_PX) * sc.x) if _fps_map_extra_show_weight_icon else 0.0
 	var label_sz := _measure_multiline_label_size(_fps_map_extra_label)
 	var right_x := info.position.x + core_sz.x
-	_fps_map_extra_label.position = Vector2(right_x - label_sz.x, base.y)
+	var left_x := info.position.x
+	var right_mode := _fps_map_use_right_text_edge()
+	if right_mode:
+		_fps_map_extra_label.position = Vector2(right_x - label_sz.x, base.y)
+	else:
+		_fps_map_extra_label.position = Vector2(left_x, base.y)
 	var vp := get_viewport()
 	if vp != null:
 		var vp_size := vp.get_visible_rect().size
@@ -1604,7 +1609,7 @@ func _position_fps_map_extras(info: Control) -> void:
 		)
 		log_fpsmap_diag("extras clamp vp=%s label_sz=%s clamped_pos=%s" % [vp_size, label_sz, _fps_map_extra_label.position])
 	_refresh_fps_map_weight_icon_transform(_fps_map_extra_label.position, sc)
-	log_fpsmap_diag("extras positioned base=%s right_x=%.2f core_h=%.2f icon_span=%.2f label_pos=%s icon=%s" % [base, right_x, core_h, icon_span, _fps_map_extra_label.position, _fps_map_extra_show_weight_icon])
+	log_fpsmap_diag("extras positioned base=%s left_x=%.2f right_x=%.2f right_mode=%s core_h=%.2f icon_span=%.2f label_pos=%s icon=%s" % [base, left_x, right_x, right_mode, core_h, icon_span, _fps_map_extra_label.position, _fps_map_extra_show_weight_icon])
 
 
 func _refresh_fps_map_weight_icon_transform(label_pos: Vector2, scale_vec: Vector2) -> void:
@@ -1679,6 +1684,7 @@ func _resolve_weight_icon_texture() -> Texture2D:
 func _sync_fps_map_extra_style(info: Control) -> void:
 	if _fps_map_extra_label == null || !is_instance_valid(_fps_map_extra_label):
 		return
+	_fps_map_extra_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if _fps_map_use_right_text_edge() else HORIZONTAL_ALIGNMENT_LEFT
 	## Prefer FPS/Frames (the numeric value label) as the style reference — it's the primary element.
 	## Fall back to Map label if FPS/Frames isn't found.
 	var fps_value := info.get_node_or_null("FPS/Frames") as Label
@@ -1755,6 +1761,14 @@ func _fps_map_use_right_text_edge() -> bool:
 	if edge == "right":
 		return true
 	return (edge == "top" || edge == "bottom") && align == "trailing"
+
+
+func _fps_map_use_left_text_edge() -> bool:
+	var edge := _normalize_cluster_edge(str(_cfg.fps_map_cluster_justify))
+	var align := _normalize_cluster_alignment(str(_cfg.fps_map_cluster_alignment))
+	if edge == "left":
+		return true
+	return (edge == "top" || edge == "bottom") && align == "leading"
 
 func _ensure_fps_label_style(info: Control) -> void:
 	if info == null:

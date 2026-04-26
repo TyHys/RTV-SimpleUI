@@ -5,9 +5,10 @@ SimpleHUD gives you a configurable HUD for Road to Vostok, using presets that ca
 
 ## 1.0.6 Update Highlights
 
-- **Show All Vitals** hold-key (default `-`): hold to force all vitals visible at full opacity, regardless of thresholds or transparency settings — useful when you need a quick status check without changing your config.
+- **Show All Vitals** hold-key: hold to force all vitals visible at full opacity, regardless of thresholds or transparency settings — useful when you need a quick status check without changing your config.
 - **MCM release variant** (`SimpleUI-MCM.vmz`): optional build that integrates with **Mod Configuration Menu** by Doink Oink. Exposes Vitals, Ailments, Keybinds, and Misc settings directly inside the MCM menu. Requires MCM installed alongside it — standard `SimpleUI.vmz` is unchanged.
 - **Internal performance pass**: per-frame node lookups, file reads, and array allocations are cached or rate-limited. Most notably: HUD child nodes cached at bind time, preferences file read only when mtime changes, fill-empty layout changes debounced at 200 ms.
+- **Cleaner defaults for new installs**: `Toggle HUD` and `Show All Vitals` are unassigned by default so players can bind keys that do not conflict with their setup.
 
 
 ## What This Framework Lets You Control
@@ -20,7 +21,7 @@ SimpleHUD gives you a configurable HUD for Road to Vostok, using presets that ca
 - **Layout behavior:** tune edge placement, ordering, padding, spacing, scale, and `Fill empty space` behavior for both vitals and ailments.
 - **Ailment behavior:** choose hidden/inflicted/always modes plus active and inactive tint/opacity styling.
 - **Misc HUD behavior:** configure compass/crosshair options, FPS label visibility, and map-label mode (`default`, `map_only`, `region_only`).
-- **Runtime control:** toggle HUD visibility with `Toggle HUD` (default `=`), or hold `Show All Vitals` (default `-`) to temporarily reveal all vitals at full opacity.
+- **Runtime control:** bind `Toggle HUD` and/or `Show All Vitals` in Controls (or MCM in the MCM variant) to quickly hide HUD or temporarily reveal all vitals at full opacity.
 
 ## In-Game Configuration (Main Menu — standard build)
 
@@ -73,6 +74,7 @@ For loader setup details, troubleshooting, and path specifics, refer to Metro Mo
 ## Recent Improvements
 
 - **1.0.6:** Show All Vitals hold-key bypasses thresholds/transparency to reveal all vitals instantly while held.
+- **1.0.6:** Toggle HUD and Show All Vitals keybind defaults are now unassigned.
 - **1.0.6:** MCM integration variant (`SimpleUI-MCM.vmz`) lets MCM users configure SimpleHUD without a separate main-menu panel.
 - **1.0.6:** Internal performance pass — node caches, mtime-gated file reads, debounced fill-empty layout, and static array caches across HudOverlay and StatusTray.
 - **1.0.5:** Dynamic crosshair rendering further optimized; disabled beta features fully skip per-frame update paths.
